@@ -1,11 +1,8 @@
-import { useState } from 'react';
-import { Cloud, Images, PanelLeftClose, PanelLeftOpen, Upload } from 'lucide-react';
+import { Cloud, Images, Upload } from 'lucide-react';
 
-/** Navigation only targets existing sections; collapsing is local presentation state. */
+/** Desktop navigation expands on pointer hover or keyboard focus; compact screens stay fully usable. */
 export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false);
-
-  return <aside className={`sidebar${collapsed ? ' is-collapsed' : ''}`} aria-label="工作空间导航">
+  return <aside className="sidebar" aria-label="工作空间导航">
     <a className="brand" href="/" aria-label="Odette 首页">
       <span className="brand-mark"><Cloud size={23} strokeWidth={1.8}/></span>
       <span className="sidebar-label brand-name">odette<span>媒体资产管理</span></span>
@@ -17,9 +14,6 @@ export function Sidebar() {
     </nav>
     <div className="sidebar-bottom">
       <div className="storage-note sidebar-label"><Cloud size={19}/><div><strong>原图存储</strong><p>保留原始画质，随时分享链接。</p></div></div>
-      <button className="sidebar-toggle" aria-label={collapsed ? '展开侧边栏' : '折叠侧边栏'} aria-expanded={!collapsed} onClick={() => setCollapsed(value => !value)}>
-        {collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}<span className="sidebar-label">收起导航</span>
-      </button>
     </div>
   </aside>;
 }
