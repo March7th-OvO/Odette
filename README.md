@@ -26,15 +26,15 @@ npx wrangler deploy --dry-run   # 验证生产 Worker 打包
 
 ## 功能
 
-仅管理 `march7th-assets` 桶的 `image/` 命名空间：读取该前缀下的所有对象，新上传使用 `image/YYYY/MM/UUID.ext`，删除兼容 `image/banner.webp`、`image/march7th/avatar.png` 等旧路径，无需迁移现有对象。删除 Key 限制在 `image/` 内、UTF-8 最长 1024 字节，不接受空路径段、`.` / `..` 路径段、反斜杠或控制字符。HTTP 接口路径仍为 `/api/images`。
+仅管理 `march7th-assets` 桶的 `image/` 命名空间。`image/` 是目录浏览器根目录，使用 R2 `prefix + delimiter: "/"` 将扁平 Key 按层级展示；不创建数据库目录记录，也不提供整目录删除或重命名。新上传使用“当前目录前缀 + UUID.ext”，删除兼容 `image/banner.webp`、`image/march7th/avatar.png` 等旧路径，无需迁移现有对象。目录前缀和删除 Key 都限制在 `image/` 内、UTF-8 最长 1024 字节，不接受空路径段、`.` / `..` 路径段、反斜杠或控制字符。HTTP 接口路径仍为 `/api/images`。
 
 开发环境直接连接线上 `march7th-assets` 桶，不再使用 `.wrangler/state` 中的模拟数据；在本地上传和删除都会同步影响线上对象。
 
-- 拖拽与多选上传，逐个上传并报告每个文件的成功或失败。
+- 拖拽与多选上传到当前目录，逐个上传并报告每个文件的成功或失败。
 - JPEG、PNG、WebP、AVIF、GIF，单张最多 10 MiB；拒绝 SVG、空文件与明显不匹配的文件签名。
 - 图片网格按需加载 400px Cloudflare 动态缩略图；点击后才在弹窗加载原图。支持复制 URL / Markdown、删除确认、刷新。
-- 按 R2 对象 Key 前缀筛选与游标分页，每页 24 张。顺序是 R2 Key 字典序，不是上传时间倒序；不提供文件名全文搜索或全桶统计。
-- 原文件名、MIME 保存在 R2 元数据；Key 使用 UTC 年月和随机 UUID。条件写入防止覆盖已有对象。
+- 文件夹卡片、面包屑和返回按钮组成层级目录浏览器；列表使用 R2 原始游标分页，每页最多 24 个结果。顺序是 R2 Key 字典序，不是上传时间倒序；不提供文件名全文搜索或全桶统计。
+- 原文件名、MIME 保存在 R2 元数据；Key 使用当前目录前缀和随机 UUID。条件写入防止覆盖已有对象。
 
 ## 目录与分层
 
@@ -62,10 +62,10 @@ tests/                 自动测试
 | --- | --- | --- |
 | GET | `/api/health` | 健康检查，不检查桶连接 |
 | GET | `/api/images` | `prefix` 默认 `image/`，`limit` 1–100，`cursor` 可选 |
-| POST | `/api/images` | multipart/form-data，单个 `file` 字段 |
-| DELETE | `/api/images` | JSON：`{"key":"image/2026/09/<uuid>.png"}` |
+| POST | `/api/images` | multipart/form-data，单个 `file` 字段；`prefix` 为当前目录，默认 `image/` |
+| DELETE | `/api/images` | JSON：`{"key":"image/<directory>/<uuid>.png"}` |
 
-列表 `data` 为 `{items, cursor}`，`cursor: null` 表示没有下一页。图片对象包含 `key, url, thumbnailUrl, originalName, size, contentType, uploaded`。`url` 是原图地址，`thumbnailUrl` 是固定宽度 400px、自动格式、质量 75 的 Cloudflare Image Transformations 地址。删除不存在的有效 Key 也成功，便于安全重试。文件签名检查用于阻止明显伪装，不进行解码、转码或内容审核。
+列表 `data` 为 `{prefix, folders, items, cursor}`：`prefix` 是当前目录，`folders` 是 R2 `delimitedPrefixes` 返回的下一层完整前缀，`items` 只包含当前层图片，`cursor: null` 表示没有下一页。图片对象包含 `key, url, thumbnailUrl, originalName, size, contentType, uploaded`。`url` 是原图地址，`thumbnailUrl` 是固定宽度 400px、自动格式、质量 75 的 Cloudflare Image Transformations 地址。删除不存在的有效图片 Key 也成功，便于安全重试；以 `/` 结尾的目录前缀不能通过删除接口删除。文件签名检查用于阻止明显伪装，不进行解码、转码或内容审核。
 
 ## 生产部署
 
@@ -94,4 +94,4 @@ tests/                 自动测试
 
 将这个目录推送到你自己的单个 GitHub 仓库，然后在 Cloudflare Worker → Settings → Builds 连接该仓库。构建命令设为 `npm run build`，部署命令设为 `npx wrangler deploy`，选择正式发布分支。域名、桶和 Access 必须先按上述步骤配置。这里不引入额外 GitHub Actions 或第二个仓库。
 
-参考：[Workers 静态资源](https://developers.cloudflare.com/workers/static-assets/)、[Access 凭据验证](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/)、[R2 公共桶与自定义域名](https://developers.cloudflare.com/r2/buckets/public-buckets/)。
+参考：[Workers 静态资源](https://developers.cloudflare.com/workers/static-assets/)、[Access 凭据验证](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/)、[R2 Workers API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/)、[R2 公共桶与自定义域名](https://developers.cloudflare.com/r2/buckets/public-buckets/)。

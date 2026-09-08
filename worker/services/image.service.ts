@@ -1,7 +1,7 @@
 import { HTTPException } from 'hono/http-exception';
 import { IMAGE_PREFIX, IMAGE_TYPES, MAX_FILE_SIZE, type ImageItem } from '../../shared/image';
 import { ImageRepository } from '../repositories/image.repository';
-import { createKey, validKey } from '../utils/key';
+import { createKey, validKey, validPrefix } from '../utils/key';
 import { badRequest } from '../utils/response';
 
 export async function validateImage(file: File) {
@@ -35,17 +35,19 @@ export class ImageService {
       size: object.size, contentType: object.httpMetadata?.contentType || 'application/octet-stream', uploaded: object.uploaded.toISOString() };
   }
   async list(prefix: string, limit: number, cursor?: string) {
-    if (!prefix.startsWith(IMAGE_PREFIX) || new TextEncoder().encode(prefix).length > 1024) badRequest(`Prefix 必须以 ${IMAGE_PREFIX} 开头且不超过 1024 字节`);
+    if (!validPrefix(prefix)) badRequest(`Prefix 必须是 ${IMAGE_PREFIX} 下以 / 结尾的安全目录路径`);
     if (!Number.isInteger(limit) || limit < 1 || limit > 100) badRequest('limit 必须为 1–100 的整数');
     if (cursor && cursor.length > 4096) badRequest('分页游标无效');
     const result = await this.repository.list(prefix, limit, cursor);
     // 目录占位对象不作为图片展示；保留 R2 原始游标，即使本页全是占位对象也能继续翻页。
     const images = result.objects.filter(item => !(item.size === 0 && item.key.endsWith('/')));
-    return { items: images.map(item => this.serialize(item)), cursor: result.truncated ? result.cursor : null };
+    return { prefix, folders: result.delimitedPrefixes, items: images.map(item => this.serialize(item)), cursor: result.truncated ? result.cursor : null };
   }
-  async upload(file: File) {
+  async upload(file: File, prefix: string) {
     await validateImage(file);
-    const key = createKey(IMAGE_TYPES[file.type as keyof typeof IMAGE_TYPES]);
+    if (!validPrefix(prefix)) badRequest(`Prefix 必须是 ${IMAGE_PREFIX} 下以 / 结尾的安全目录路径`);
+    const key = createKey(IMAGE_TYPES[file.type as keyof typeof IMAGE_TYPES], prefix);
+    if (!validKey(key)) badRequest('当前目录路径过长，无法上传');
     const object = await this.repository.put(key, file);
     if (!object) throw new HTTPException(409, { message: '图片命名冲突，请重试' });
     return this.serialize(object);

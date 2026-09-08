@@ -11,9 +11,20 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   const keys = [];
+  const folderName = `browser-${Date.now()}`;
+  const folderPrefix = `image/${folderName}/`;
   try {
+    const nestedUpload = await context.request.post('http://127.0.0.1:5173/api/images', {multipart: {
+      prefix: folderPrefix, file: {name:'nested-check.png',mimeType:'image/png',buffer:png},
+    }});
+    assert.equal(nestedUpload.status(),200,await nestedUpload.text());
+    keys.push((await nestedUpload.json()).data.key);
     await page.goto('http://127.0.0.1:5173');
     await page.waitForLoadState('networkidle');
+    await page.getByRole('button',{name:new RegExp(folderName)}).click();
+    await page.getByRole('heading',{name:'nested-check.png',exact:true}).waitFor();
+    assert.match(await page.getByRole('navigation',{name:'当前目录'}).textContent(),new RegExp(folderName));
+    await page.getByRole('button',{name:'返回',exact:true}).click();
     console.log('Initial buttons:', await page.getByRole('button').allTextContents());
     const responsePromise = page.waitForResponse(r => r.url().endsWith('/api/images') && r.request().method() === 'POST');
     await page.getByLabel('选择要上传的图片').setInputFiles({name:'browser-check.png',mimeType:'image/png',buffer:png});
@@ -30,10 +41,6 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
     await page.locator('dialog[open]').waitFor();
     await page.waitForFunction(() => { const img = document.querySelector('.preview img'); return img?.complete && img.naturalWidth > 0; });
     await page.getByRole('button',{name:'关闭弹窗'}).click();
-    const filter = page.getByLabel('按对象路径前缀筛选');
-    await filter.fill('image/no-match'); await page.getByRole('button',{name:'筛选',exact:true}).click();
-    await page.getByText('这个路径下还没有图片').waitFor();
-    await filter.fill('image/'); await page.getByRole('button',{name:'筛选',exact:true}).click();
     await card.waitFor();
     fs.mkdirSync('.wrangler/qa',{recursive:true});
     await page.screenshot({path:'.wrangler/qa/desktop.png',fullPage:true});
@@ -45,10 +52,10 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
     assert.equal(await card.count(),1);
     await page.getByRole('button',{name:'删除 browser-check.png',exact:true}).click();
     await page.getByRole('button',{name:'确认删除',exact:true}).click();
-    await page.getByText('第一张图片，从这里开始').waitFor();
+    await card.waitFor({state:'detached'});
     assert.equal((await context.request.get(item.url)).status(),404);
     assert.deepEqual(errors,[]);
-    console.log('PASS: upload, preview bytes, URL/Markdown clipboard, prefix, mobile, cancel/delete, no runtime errors');
+    console.log('PASS: folder navigation, current-directory upload, preview, clipboard, mobile, cancel/delete and no runtime errors');
   } finally {
     for (const key of keys) await context.request.delete('http://127.0.0.1:5173/api/images',{data:{key}});
     await browser.close();

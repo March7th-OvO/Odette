@@ -8,8 +8,8 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   return result.data;
 }
 export const listImages = (prefix: string, cursor?: string, signal?: AbortSignal) => request<ImagePage>(`/api/images?${new URLSearchParams({ prefix, limit: '24', ...(cursor ? { cursor } : {}) })}`, { signal });
-export function uploadImage(file: File) {
-  const body = new FormData(); body.append('file', file);
+export function uploadImage(file: File, prefix: string) {
+  const body = new FormData(); body.append('file', file); body.append('prefix', prefix);
   return request<ImageItem>('/api/images', { method: 'POST', body });
 }
 export const deleteImage = (key: string) => request<{ key: string }>('/api/images', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });

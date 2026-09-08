@@ -2,7 +2,7 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { ImageRepository } from '../worker/repositories/image.repository';
 import app from '../worker/index';
 import { validateImage } from '../worker/services/image.service';
-import { createKey, validKey } from '../worker/utils/key';
+import { createKey, validKey, validPrefix } from '../worker/utils/key';
 import { MAX_FILE_SIZE } from '../shared/image';
 
 describe('image upload validation', () => {
@@ -15,11 +15,26 @@ describe('image upload validation', () => {
     await expect(validateImage(new File([], 'empty.jpg', {type:'image/jpeg'}))).rejects.toThrow('不能为空');
     await expect(validateImage(new File([new Uint8Array(MAX_FILE_SIZE + 1)], 'large.jpg', {type:'image/jpeg'}))).rejects.toThrow('10 MB');
   });
-  it('uses unique nested keys and rejects arbitrary deletion paths', () => {
+  it('uses unique keys in the requested directory and rejects arbitrary deletion paths', () => {
     const a = createKey('png'); const b = createKey('png');
     expect(validKey(a)).toBe(true); expect(a).not.toBe(b);
-    expect(a).toMatch(/^image\/\d{4}\/\d{2}\/[a-f0-9-]{36}\.png$/);
+    expect(a).toMatch(/^image\/[a-f0-9-]{36}\.png$/);
+    expect(createKey('webp', 'image/PhotoWall/')).toMatch(/^image\/PhotoWall\/[a-f0-9-]{36}\.webp$/);
+    expect(validPrefix('image/')).toBe(true);
+    expect(validPrefix('image/PhotoWall/')).toBe(true);
+    expect(validPrefix('image/PhotoWall')).toBe(false);
     expect(validKey('images/../../secret')).toBe(false);
+  });
+});
+
+describe('hierarchical R2 listing', () => {
+  it('groups the next key segment with delimiter', async () => {
+    const list = vi.fn().mockResolvedValue({ objects: [], delimitedPrefixes: [], truncated: false });
+    const repository = new ImageRepository({ list } as unknown as R2Bucket);
+    await repository.list('image/PhotoWall/', 24, 'next');
+    expect(list).toHaveBeenCalledExactlyOnceWith({
+      prefix: 'image/PhotoWall/', delimiter: '/', limit: 24, cursor: 'next', include: ['httpMetadata', 'customMetadata'],
+    });
   });
 });
 
@@ -40,22 +55,44 @@ describe('legacy image namespace', () => {
     expect(response.status).toBe(400);
     expect(remove).not.toHaveBeenCalled();
   });
-  it('lists legacy objects by default and keeps their original paths in public URLs', async () => {
+  it('returns the current prefix, child folders and direct images', async () => {
     const list = vi.spyOn(ImageRepository.prototype, 'list').mockResolvedValue({
       objects: [{ key: 'image/home/背景 图.jpg', size: 100, uploaded: new Date('2026-09-08'), etag: 'test', httpEtag: '"test"', version: 'test', checksums: {}, storageClass: 'Standard' }],
-      truncated: false, delimitedPrefixes: [],
+      truncated: false, delimitedPrefixes: ['image/home/archive/'],
     });
-    const response = await app.request('http://localhost/api/images', {}, env);
+    const response = await app.request('http://localhost/api/images?prefix=image/home/', {}, env);
     expect(response.status).toBe(200);
-    expect(list).toHaveBeenCalledWith('image/', 24, undefined);
-    expect((await response.json()).data.items[0]).toMatchObject({
+    expect(list).toHaveBeenCalledWith('image/home/', 24, undefined);
+    const { data } = await response.json();
+    expect(data).toMatchObject({ prefix: 'image/home/', folders: ['image/home/archive/'], cursor: null });
+    expect(data.items[0]).toMatchObject({
       key: 'image/home/背景 图.jpg', originalName: '背景 图.jpg',
       url: `https://img.odette.moe/image/home/${encodeURIComponent('背景 图.jpg')}`,
       thumbnailUrl: `https://img.odette.moe/cdn-cgi/image/width=400,fit=scale-down,format=auto,quality=75/image/home/${encodeURIComponent('背景 图.jpg')}`,
     });
-    await app.request('http://localhost/api/images?prefix=image/home/', {}, env);
-    expect(list).toHaveBeenLastCalledWith('image/home/', 24, undefined);
     expect((await app.request('http://localhost/api/images?prefix=images/', {}, env)).status).toBe(400);
+  });
+  it('uploads into the selected directory', async () => {
+    const put = vi.spyOn(ImageRepository.prototype, 'put').mockImplementation(async key => ({
+      key, size: 67, uploaded: new Date('2026-09-08'), etag: 'test', httpEtag: '"test"', version: 'test', checksums: {}, storageClass: 'Standard',
+      httpMetadata: { contentType: 'image/png' }, customMetadata: { originalName: 'new.png' },
+    }));
+    const body = new FormData();
+    body.append('file', new File([new Uint8Array([137,80,78,71,13,10,26,10])], 'new.png', { type: 'image/png' }));
+    body.append('prefix', 'image/PhotoWall/');
+    const response = await app.request('http://localhost/api/images', { method: 'POST', body }, env);
+    expect(response.status).toBe(200);
+    expect(put.mock.calls[0][0]).toMatch(/^image\/PhotoWall\/[a-f0-9-]{36}\.png$/);
+    expect((await response.json()).data.key).toBe(put.mock.calls[0][0]);
+  });
+  it('rejects an unsafe upload directory before writing to R2', async () => {
+    const put = vi.spyOn(ImageRepository.prototype, 'put').mockResolvedValue(null);
+    const body = new FormData();
+    body.append('file', new File([new Uint8Array([137,80,78,71,13,10,26,10])], 'new.png', { type: 'image/png' }));
+    body.append('prefix', 'image/../');
+    const response = await app.request('http://localhost/api/images', { method: 'POST', body }, env);
+    expect(response.status).toBe(400);
+    expect(put).not.toHaveBeenCalled();
   });
 });
 
@@ -68,25 +105,25 @@ describe('folder markers', () => {
   });
   it('hides only zero-byte objects whose keys end with a slash', async () => {
     vi.spyOn(ImageRepository.prototype, 'list').mockResolvedValue({
-      objects: [object('image/', 0), object('image/PhotoWall/', 0), object('image/PhotoWall/photo.jpg', 100), object('image/empty.png', 0), object('image/nonempty/', 100)],
+      objects: [object('image/PhotoWall/', 0), object('image/PhotoWall/photo.jpg', 100), object('image/PhotoWall/empty.png', 0), object('image/PhotoWall/nonempty/', 100)],
       truncated: false, delimitedPrefixes: [],
     });
-    const response = await app.request('http://localhost/api/images', {}, env);
+    const response = await app.request('http://localhost/api/images?prefix=image/PhotoWall/', {}, env);
     expect(response.status).toBe(200);
     const { data } = await response.json();
-    expect(data.items.map((item: { key: string }) => item.key)).toEqual(['image/PhotoWall/photo.jpg', 'image/empty.png', 'image/nonempty/']);
+    expect(data.items.map((item: { key: string }) => item.key)).toEqual(['image/PhotoWall/photo.jpg', 'image/PhotoWall/empty.png', 'image/PhotoWall/nonempty/']);
     expect(data.cursor).toBeNull();
   });
   it('retains the cursor on a marker-only page so the next image remains reachable', async () => {
     const list = vi.spyOn(ImageRepository.prototype, 'list')
-      .mockResolvedValueOnce({ objects: [object('image/PhotoWall/', 0)], truncated: true, cursor: 'next-page', delimitedPrefixes: [] })
-      .mockResolvedValueOnce({ objects: [object('image/PhotoWall/photo.jpg', 100)], truncated: false, delimitedPrefixes: [] });
+      .mockResolvedValueOnce({ objects: [object('image/', 0)], truncated: true, cursor: 'next-page', delimitedPrefixes: [] })
+      .mockResolvedValueOnce({ objects: [object('image/photo.jpg', 100)], truncated: false, delimitedPrefixes: [] });
     const first = await app.request('http://localhost/api/images?limit=1', {}, env);
-    expect((await first.json()).data).toEqual({ items: [], cursor: 'next-page' });
+    expect((await first.json()).data).toEqual({ prefix: 'image/', folders: [], items: [], cursor: 'next-page' });
     const next = await app.request('http://localhost/api/images?limit=1&cursor=next-page', {}, env);
     expect(list).toHaveBeenLastCalledWith('image/', 1, 'next-page');
     const { data } = await next.json();
-    expect(data.items[0].key).toBe('image/PhotoWall/photo.jpg');
+    expect(data.items[0].key).toBe('image/photo.jpg');
     expect(data.cursor).toBeNull();
   });
 });
@@ -111,7 +148,7 @@ describe('API boundary', () => {
     expect((await app.request('https://admin.example.com/api/images',options,{APP_ENV:'production'} as Env)).status).toBe(403);
   });
   it('validates list arguments and JSON before touching storage', async () => {
-    for (const query of ['limit=0','limit=101','limit=1.5','limit=abc','prefix=private/']) {
+    for (const query of ['limit=0','limit=101','limit=1.5','limit=abc','prefix=private/','prefix=image/no-slash','prefix=image/../','prefix=image//nested/']) {
       expect((await app.request(`http://localhost/api/images?${query}`, {}, env)).status).toBe(400);
     }
     expect((await app.request('http://localhost/api/images', {method:'DELETE',body:'{'}, env)).status).toBe(400);

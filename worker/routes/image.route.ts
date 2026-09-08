@@ -14,7 +14,9 @@ imageRoutes.post('/', bodyLimit({ maxSize: MAX_FILE_SIZE + 64 * 1024, onError: c
   try { form = await c.req.formData(); } catch { return badRequest('请使用 multipart/form-data 上传图片'); }
   const files = form.getAll('file');
   if (files.length !== 1 || !(files[0] instanceof File)) return badRequest('每次请求请提供一个 file 文件字段');
-  return c.json(success(await new ImageService(c.env).upload(files[0])));
+  const prefix = form.get('prefix');
+  if (prefix !== null && typeof prefix !== 'string') return badRequest('prefix 必须是目录路径');
+  return c.json(success(await new ImageService(c.env).upload(files[0], prefix || IMAGE_PREFIX)));
 });
 imageRoutes.delete('/', bodyLimit({ maxSize: 4096 }), async c => {
   let body: unknown;
