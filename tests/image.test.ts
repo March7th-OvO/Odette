@@ -49,7 +49,9 @@ describe('legacy image namespace', () => {
     expect(response.status).toBe(200);
     expect(list).toHaveBeenCalledWith('image/', 24, undefined);
     expect((await response.json()).data.items[0]).toMatchObject({
-      key: 'image/home/背景 图.jpg', originalName: '背景 图.jpg', url: `https://img.odette.moe/image/home/${encodeURIComponent('背景 图.jpg')}`,
+      key: 'image/home/背景 图.jpg', originalName: '背景 图.jpg',
+      url: `https://img.odette.moe/image/home/${encodeURIComponent('背景 图.jpg')}`,
+      thumbnailUrl: `https://img.odette.moe/cdn-cgi/image/width=400,fit=scale-down,format=auto,quality=75/image/home/${encodeURIComponent('背景 图.jpg')}`,
     });
     await app.request('http://localhost/api/images?prefix=image/home/', {}, env);
     expect(list).toHaveBeenLastCalledWith('image/home/', 24, undefined);

@@ -25,7 +25,12 @@ export class ImageService {
   private repository: ImageRepository;
   constructor(private env: Env) { this.repository = new ImageRepository(env.IMAGE_BUCKET); }
   private serialize(object: R2Object): ImageItem {
-    return { key: object.key, url: `${this.env.PUBLIC_IMAGE_URL.replace(/\/$/, '')}/${object.key.split('/').map(encodeURIComponent).join('/')}`,
+    const baseUrl = this.env.PUBLIC_IMAGE_URL.replace(/\/$/, '');
+    const imagePath = object.key.split('/').map(encodeURIComponent).join('/');
+    const url = `${baseUrl}/${imagePath}`;
+    // Cloudflare 在边缘按需生成并缓存缩略图，R2 中仍只保存一份原图。
+    const thumbnailUrl = `${baseUrl}/cdn-cgi/image/width=400,fit=scale-down,format=auto,quality=75/${imagePath}`;
+    return { key: object.key, url, thumbnailUrl,
       originalName: object.customMetadata?.originalName || object.key.split('/').pop()!,
       size: object.size, contentType: object.httpMetadata?.contentType || 'application/octet-stream', uploaded: object.uploaded.toISOString() };
   }

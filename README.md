@@ -32,7 +32,7 @@ npx wrangler deploy --dry-run   # 验证生产 Worker 打包
 
 - 拖拽与多选上传，逐个上传并报告每个文件的成功或失败。
 - JPEG、PNG、WebP、AVIF、GIF，单张最多 10 MiB；拒绝 SVG、空文件与明显不匹配的文件签名。
-- 图片网格、原图弹窗、复制 URL / Markdown、删除确认、刷新。
+- 图片网格按需加载 400px Cloudflare 动态缩略图；点击后才在弹窗加载原图。支持复制 URL / Markdown、删除确认、刷新。
 - 按 R2 对象 Key 前缀筛选与游标分页，每页 24 张。顺序是 R2 Key 字典序，不是上传时间倒序；不提供文件名全文搜索或全桶统计。
 - 原文件名、MIME 保存在 R2 元数据；Key 使用 UTC 年月和随机 UUID。条件写入防止覆盖已有对象。
 
@@ -65,7 +65,7 @@ tests/                 自动测试
 | POST | `/api/images` | multipart/form-data，单个 `file` 字段 |
 | DELETE | `/api/images` | JSON：`{"key":"image/2026/09/<uuid>.png"}` |
 
-列表 `data` 为 `{items, cursor}`，`cursor: null` 表示没有下一页。图片对象包含 `key, url, originalName, size, contentType, uploaded`。删除不存在的有效 Key 也成功，便于安全重试。文件签名检查用于阻止明显伪装，不进行解码、转码或内容审核。
+列表 `data` 为 `{items, cursor}`，`cursor: null` 表示没有下一页。图片对象包含 `key, url, thumbnailUrl, originalName, size, contentType, uploaded`。`url` 是原图地址，`thumbnailUrl` 是固定宽度 400px、自动格式、质量 75 的 Cloudflare Image Transformations 地址。删除不存在的有效 Key 也成功，便于安全重试。文件签名检查用于阻止明显伪装，不进行解码、转码或内容审核。
 
 ## 生产部署
 
@@ -73,15 +73,16 @@ tests/                 自动测试
 
 1. 登录 Cloudflare：`npx wrangler login`，创建 R2 桶：`npx wrangler r2 bucket create march7th-assets`。
 2. 在 R2 桶的设置中连接你自己的图片域名（例如 `img.example.com`）。图片公开读取；不要给图片域名配置管理后台的 Access 限制。
-3. 在 Cloudflare Zero Trust → Access 创建 Self-hosted 应用，覆盖整个管理域名（例如 `admin.example.com`），Allow 策略仅允许自己的邮箱。记录 team domain 和 Application Audience（AUD）。
-4. 修改 `wrangler.jsonc` 的顶层生产配置：`PUBLIC_IMAGE_URL`、`ACCESS_TEAM_DOMAIN`（仅主机名，如 `your-team.cloudflareaccess.com`）、`ACCESS_AUD`、`r2_buckets` 的桶名。补充管理域名：
+3. 在图片域名所在 Zone 的 Images → Transformations 中启用转换。缩略图通过图片域名自身的 `/cdn-cgi/image/` 路径读取同域原图，无需额外添加允许来源。
+4. 在 Cloudflare Zero Trust → Access 创建 Self-hosted 应用，覆盖整个管理域名（例如 `admin.example.com`），Allow 策略仅允许自己的邮箱。记录 team domain 和 Application Audience（AUD）。
+5. 修改 `wrangler.jsonc` 的顶层生产配置：`PUBLIC_IMAGE_URL`、`ACCESS_TEAM_DOMAIN`（仅主机名，如 `your-team.cloudflareaccess.com`）、`ACCESS_AUD`、`r2_buckets` 的桶名。补充管理域名：
 
    ```jsonc
    "routes": [{ "pattern": "admin.example.com", "custom_domain": true }]
    ```
 
-5. 执行 `npm run cf-typegen`、`npm run build`、`npx wrangler deploy`。或者 `npm run deploy` 一次构建并部署。
-6. 验证未登录访问管理域名会进入 Access 登录；登录后可上传，图片 URL 的主机名为图片域名，未登录浏览器也可打开图片。
+6. 执行 `npm run cf-typegen`、`npm run build`、`npx wrangler deploy`。或者 `npm run deploy` 一次构建并部署。
+7. 验证未登录访问管理域名会进入 Access 登录；登录后可上传，列表请求 `/cdn-cgi/image/` 缩略图，点击预览后才请求原图 URL，且未登录浏览器也可打开图片。
 
 默认关闭 `workers.dev` 和预览 URL，避免出现未受 Access 保护的额外管理入口。Access 配置缺失时 API 返回 503，绝不会默认放行。Worker 使用 `jose` 验证 **Cloudflare 签发的 Access assertion**（签名、issuer、audience、有效期），不自行签发 JWT，也没有用户表、密码或 refresh token。静态后台由整个域名的 Access 应用保护。
 
