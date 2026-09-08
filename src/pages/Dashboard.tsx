@@ -123,7 +123,7 @@ export function Dashboard() {
     <div className="workspace">
     <header className="topbar"><div className="workspace-label"><Images size={17}/><span>工作空间</span><ChevronRight size={13}/><strong>图片库</strong></div><div className="private-badge"><ShieldCheck size={15}/> 个人图片空间</div></header>
     <main id="main-content">
-      <div className="page-heading"><div><p className="eyebrow">MEDIA LIBRARY</p><h1>图片库</h1><p>管理、浏览和分享你的图片资源。</p></div><span className="heading-aside"><span className="soft-badge">原图存储</span><span>清晰保存，自由分享</span></span></div>
+      <div className="page-heading"><div><p className="eyebrow">MEDIA LIBRARY</p><h1>图片库</h1><p>管理、浏览和分享你的图片资源。</p></div><span className="heading-aside"><span>清晰保存，自由分享</span></span></div>
       <UploadArea busy={uploading} prefix={currentPrefix} onFiles={files => { void upload(files); }}/>
       {notice && <div className="notice" role="status"><CheckCircle2 size={17}/>{notice}<button className="icon-button" aria-label="关闭提示" onClick={() => setNotice('')}><X size={15}/></button></div>}
       {uploadResults.length > 0 && <details className="upload-results"><summary>{uploading ? '上传进行中' : '查看上传结果'} · {uploadResults.length} 个文件</summary><ul>{uploadResults.map((result, index) => <li key={index}>{result}</li>)}</ul></details>}

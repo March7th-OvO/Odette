@@ -51,6 +51,9 @@
   --shadow-md: 0 6px 24px rgba(31, 36, 48, 0.07);
   --shadow-modal: 0 20px 60px rgba(31, 36, 48, 0.14);
   --motion-duration: 160ms;
+  --sidebar-motion-duration: 260ms;
+  --sidebar-easing: cubic-bezier(.22, 1, .36, 1);
+  --sidebar-label-delay: 45ms;
   --layer-navigation: 10;
   color: var(--odette-text-primary);
   background: var(--odette-background);
@@ -93,8 +96,8 @@ input { min-width: 0; color: var(--odette-text-primary); }
 input::placeholder { color: var(--odette-text-muted); }
 ::selection { background: var(--odette-soft); color: var(--odette-text-primary); }
 
-/* The sidebar occupies its own grid track; content never sits underneath it. */
-.app-shell { display: grid; grid-template-columns: auto minmax(0, 1fr); min-height: 100dvh; }
+/* Keep the content track stable while the navigation expands over it. */
+.app-shell { display: grid; grid-template-columns: 80px minmax(0, 1fr); min-height: 100dvh; }
 .sidebar {
   position: sticky;
   top: 0;
@@ -107,7 +110,10 @@ input::placeholder { color: var(--odette-text-muted); }
   background: var(--odette-surface);
   z-index: var(--layer-navigation);
   overflow: hidden;
-  transition: width var(--motion-duration) ease, padding-inline var(--motion-duration) ease;
+  will-change: width;
+  transition: width var(--sidebar-motion-duration) var(--sidebar-easing),
+    padding-inline var(--sidebar-motion-duration) var(--sidebar-easing),
+    box-shadow var(--motion-duration) ease;
 }
 .brand { display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-2); }
 .brand-mark { display: grid; place-items: center; width: 38px; height: 38px; flex-shrink: 0; border-radius: var(--radius-md); background: var(--odette-primary); color: var(--odette-surface); }
@@ -118,23 +124,29 @@ input::placeholder { color: var(--odette-text-muted); }
 .nav-item { display: flex; align-items: center; gap: var(--space-3); min-height: 44px; padding: var(--space-3); color: var(--odette-text-secondary); border-radius: var(--radius-control); font-size: 13px; }
 .nav-item:hover { background: var(--odette-hover); color: var(--odette-primary); }
 .nav-item.is-active { background: var(--odette-selected); color: var(--odette-primary); font-weight: 600; }
-.sidebar-bottom { margin-top: auto; padding-top: var(--space-8); }
-.storage-note { display: flex; align-items: flex-start; gap: var(--space-2); padding: var(--space-4) var(--space-3); background: var(--odette-surface-secondary); border: 1px solid var(--odette-divider); border-radius: var(--radius-md); }
-.storage-note>svg { flex-shrink: 0; color: var(--odette-secondary); }
-.storage-note strong { font-size: 12px; font-weight: 500; }
-.storage-note p { margin: var(--space-2) 0 0; font-size: 11px; line-height: 1.8; color: var(--odette-text-secondary); }
-.sidebar .sidebar-label, .sidebar .sidebar-bottom { display: none; }
-.sidebar .brand { padding: 0; justify-content: center; }
-.sidebar .sidebar-nav { margin-top: var(--space-12); }
-.sidebar .nav-item { justify-content: center; }
-/* Keyboard focus mirrors pointer hover so navigation remains accessible without a mouse. */
-.sidebar:hover, .sidebar:has(:focus-visible) { width: 224px; padding-inline: var(--space-4); }
-.sidebar:hover .sidebar-label, .sidebar:hover .sidebar-bottom,
-.sidebar:has(:focus-visible) .sidebar-label, .sidebar:has(:focus-visible) .sidebar-bottom { display: block; }
-.sidebar:hover .storage-note, .sidebar:has(:focus-visible) .storage-note { display: flex; }
-.sidebar:hover .brand, .sidebar:has(:focus-visible) .brand { padding-inline: var(--space-2); justify-content: flex-start; }
-.sidebar:hover .sidebar-nav, .sidebar:has(:focus-visible) .sidebar-nav { margin-top: 0; }
-.sidebar:hover .nav-item, .sidebar:has(:focus-visible) .nav-item { justify-content: flex-start; }
+
+.sidebar-label {
+  display: grid;
+  grid-template-columns: 0fr;
+  min-width: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: grid-template-columns var(--sidebar-motion-duration) var(--sidebar-easing),
+    opacity var(--motion-duration) ease;
+}
+.sidebar-label-content { min-width: 0; overflow: hidden; white-space: nowrap; }
+/* The React state keeps visual, interaction and accessibility states in sync. */
+.sidebar[data-state='expanded'] {
+  width: 224px;
+  padding-inline: var(--space-4);
+  box-shadow: var(--shadow-md);
+}
+.sidebar[data-state='expanded'] .sidebar-label {
+  grid-template-columns: 1fr;
+  opacity: 1;
+  pointer-events: auto;
+  transition-delay: var(--sidebar-label-delay);
+}
 .workspace { min-width: 0; }
 .topbar { height: 68px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: 0 var(--space-8); background: var(--odette-surface); border-bottom: 1px solid var(--odette-border); }
 .workspace-label, .private-badge { display: flex; align-items: center; gap: var(--space-3); font-size: 12px; color: var(--odette-text-secondary); }
@@ -289,7 +301,7 @@ dialog::backdrop { background: var(--odette-overlay); backdrop-filter: blur(2px)
 /* Prioritize filenames and actions: reduce grid columns before squeezing cards. */
 @media (max-width: 1320px) {
   .image-grid, .folder-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .sidebar:hover, .sidebar:has(:focus-visible) { width: 208px; }
+  .sidebar[data-state='expanded'] { width: 208px; }
   .heading-aside>span:last-child { display: none; }
 }
 @media (max-width: 1080px) {
@@ -307,8 +319,7 @@ dialog::backdrop { background: var(--odette-overlay); backdrop-filter: blur(2px)
 }
 @media (max-width: 860px) {
   /* Narrower tablet navigation leaves room for two readable card columns. */
-  .sidebar:hover, .sidebar:has(:focus-visible) { width: 184px; padding-inline: var(--space-3); }
-  .sidebar:hover .storage-note, .sidebar:has(:focus-visible) .storage-note { padding: var(--space-3) var(--space-2); }
+  .sidebar[data-state='expanded'] { width: 184px; padding-inline: var(--space-3); }
   .upload-area { flex-wrap: wrap; }
   .upload-copy { flex-basis: calc(100% - 72px); }
   .upload-area>.primary { margin-left: 64px; }
@@ -317,10 +328,11 @@ dialog::backdrop { background: var(--odette-overlay); backdrop-filter: blur(2px)
 }
 @media (max-width: 640px) {
   .app-shell { grid-template-columns: minmax(0, 1fr); }
-  .sidebar, .sidebar:hover, .sidebar:has(:focus-visible) { position: static; width: 100%; height: auto; flex-direction: row; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4); border-right: 0; border-bottom: 1px solid var(--odette-border); overflow: visible; }
+  .sidebar, .sidebar[data-state='expanded'] { position: static; width: 100%; height: auto; flex-direction: row; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4); border-right: 0; border-bottom: 1px solid var(--odette-border); overflow: visible; box-shadow: none; }
   .sidebar .brand { padding: 0; }
+  .sidebar .brand .sidebar-label { grid-template-columns: 1fr; opacity: 1; pointer-events: auto; }
   .sidebar .brand-name { display: block; font-size: 22px; }
-  .brand-name>span, .sidebar-section-label, .sidebar-bottom, .sidebar .nav-item .sidebar-label { display: none; }
+  .brand-name>span, .sidebar-section-label, .sidebar .nav-item .sidebar-label { display: none; }
   .sidebar .sidebar-nav { display: flex; margin: 0; gap: var(--space-2); }
   .nav-item { min-height: 40px; padding: 10px; }
   .topbar { height: 48px; padding-inline: var(--space-4); }
@@ -362,6 +374,6 @@ dialog::backdrop { background: var(--odette-overlay); backdrop-filter: blur(2px)
 }
 @media (hover: none) { .expand { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  :root { --motion-duration: 0ms; }
+  :root { --motion-duration: 0ms; --sidebar-motion-duration: 0ms; --sidebar-label-delay: 0ms; }
   .spin, .skeleton { animation: none; }
 }
