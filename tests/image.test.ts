@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import { ImageRepository } from '../worker/repositories/image.repository';
 import app from '../worker/index';
 import { validateImage } from '../worker/services/image.service';
 import { createKey, validKey } from '../worker/utils/key';
@@ -17,7 +18,42 @@ describe('image upload validation', () => {
   it('uses unique nested keys and rejects arbitrary deletion paths', () => {
     const a = createKey('png'); const b = createKey('png');
     expect(validKey(a)).toBe(true); expect(a).not.toBe(b);
+    expect(a).toMatch(/^image\/\d{4}\/\d{2}\/[a-f0-9-]{36}\.png$/);
     expect(validKey('images/../../secret')).toBe(false);
+  });
+});
+
+describe('legacy image namespace', () => {
+  afterEach(() => vi.restoreAllMocks());
+  const env = { APP_ENV: 'development', PUBLIC_IMAGE_URL: 'https://img.odette.moe' } as Env;
+  it.each(['image/banner.webp', 'image/march7th/avatar.png', 'image/home/背景 图.jpg'])('deletes the exact legacy key %s', async key => {
+    const remove = vi.spyOn(ImageRepository.prototype, 'delete').mockResolvedValue();
+    const response = await app.request('http://localhost/api/images', {
+      method: 'DELETE', body: JSON.stringify({ key }), headers: { 'Content-Type': 'application/json' },
+    }, env);
+    expect(response.status).toBe(200);
+    expect(remove).toHaveBeenCalledExactlyOnceWith(key);
+  });
+  it.each(['image/', '/image/a.png', 'images/a.png', 'video/a.png', 'image/../secret', 'image/./a.png', 'image//a.png', 'image/a\\b.png', 'image/a\u0000.png', `image/${'中'.repeat(340)}.png`])('rejects unsafe or out-of-scope key %s', async key => {
+    const remove = vi.spyOn(ImageRepository.prototype, 'delete').mockResolvedValue();
+    const response = await app.request('http://localhost/api/images', { method: 'DELETE', body: JSON.stringify({ key }) }, env);
+    expect(response.status).toBe(400);
+    expect(remove).not.toHaveBeenCalled();
+  });
+  it('lists legacy objects by default and keeps their original paths in public URLs', async () => {
+    const list = vi.spyOn(ImageRepository.prototype, 'list').mockResolvedValue({
+      objects: [{ key: 'image/home/背景 图.jpg', size: 100, uploaded: new Date('2026-09-08'), etag: 'test', httpEtag: '"test"', version: 'test', checksums: {}, storageClass: 'Standard' }],
+      truncated: false, delimitedPrefixes: [],
+    });
+    const response = await app.request('http://localhost/api/images', {}, env);
+    expect(response.status).toBe(200);
+    expect(list).toHaveBeenCalledWith('image/', 24, undefined);
+    expect((await response.json()).data.items[0]).toMatchObject({
+      key: 'image/home/背景 图.jpg', originalName: '背景 图.jpg', url: `https://img.odette.moe/image/home/${encodeURIComponent('背景 图.jpg')}`,
+    });
+    await app.request('http://localhost/api/images?prefix=image/home/', {}, env);
+    expect(list).toHaveBeenLastCalledWith('image/home/', 24, undefined);
+    expect((await app.request('http://localhost/api/images?prefix=images/', {}, env)).status).toBe(400);
   });
 });
 

@@ -1,13 +1,13 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import { MAX_FILE_SIZE } from '../../shared/image';
+import { IMAGE_PREFIX, MAX_FILE_SIZE } from '../../shared/image';
 import { ImageService } from '../services/image.service';
 import type { AppEnv } from '../types/env';
 import { badRequest, success } from '../utils/response';
 
 export const imageRoutes = new Hono<AppEnv>();
 imageRoutes.get('/', async c => c.json(success(await new ImageService(c.env).list(
-  c.req.query('prefix') || 'images/', Number(c.req.query('limit') ?? 24), c.req.query('cursor') || undefined,
+  c.req.query('prefix') || IMAGE_PREFIX, Number(c.req.query('limit') ?? 24), c.req.query('cursor') || undefined,
 ))));
 imageRoutes.post('/', bodyLimit({ maxSize: MAX_FILE_SIZE + 64 * 1024, onError: c => c.json({ code: 413, data: null, message: '上传请求过大，单文件上限 10 MB' }, 413) }), async c => {
   let form: FormData;
