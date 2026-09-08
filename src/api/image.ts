@@ -1,4 +1,5 @@
 import type { ApiResponse, ImageItem, ImagePage } from '../../shared/image';
+import type { FolderItem } from '../../shared/folder';
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options);
@@ -13,3 +14,8 @@ export function uploadImage(file: File, prefix: string) {
   return request<ImageItem>('/api/images', { method: 'POST', body });
 }
 export const deleteImage = (key: string) => request<{ key: string }>('/api/images', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });
+export const createFolder = (parentPrefix: string, name: string) => request<FolderItem>('/api/folders', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ parentPrefix, name }),
+});

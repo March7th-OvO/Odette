@@ -258,6 +258,17 @@ dialog::backdrop { background: var(--odette-overlay); backdrop-filter: blur(2px)
 .confirm p:not(.eyebrow) { font-size: 13px; line-height: 1.8; color: var(--odette-text-secondary); }
 .confirm .delete-name { padding: var(--space-3); background: var(--odette-surface-secondary); border: 1px solid var(--odette-divider); border-radius: var(--radius-control); overflow-wrap: anywhere; }
 .confirm-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-6); }
+.create-folder { width: min(420px, 78vw); }
+.create-folder h2 { margin: 0 0 var(--space-6); font-size: 20px; }
+.create-folder label { display: block; margin-top: var(--space-4); color: var(--odette-text-secondary); font-size: 12px; font-weight: 500; }
+.create-folder .current-directory { display: block; margin-top: var(--space-2); padding: var(--space-3); overflow: hidden; border: 1px solid var(--odette-divider); border-radius: var(--radius-control); background: var(--odette-surface-secondary); color: var(--odette-text-primary); font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.create-folder input { width: 100%; height: 42px; margin-top: var(--space-2); padding: 0 var(--space-3); border: 1px solid var(--odette-border); border-radius: var(--radius-control); background: var(--odette-surface); font-size: 13px; }
+.create-folder input:hover { border-color: var(--odette-accent); }
+.create-folder input:focus { border-color: var(--odette-primary); outline: none; box-shadow: 0 0 0 3px var(--odette-focus); }
+.create-folder input[aria-invalid='true'] { border-color: var(--odette-danger); }
+.field-hint, .field-error { margin: var(--space-2) 0 0; font-size: 11px; line-height: 1.6; }
+.field-hint { color: var(--odette-text-muted); }
+.field-error { color: var(--odette-danger-text); }
 .danger { background: var(--odette-danger); color: var(--odette-surface); border-color: var(--odette-danger); }
 .danger:hover, .danger:active { background: var(--odette-danger-hover); color: var(--odette-surface); border-color: var(--odette-danger-hover); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
@@ -339,7 +350,7 @@ dialog::backdrop { background: var(--odette-overlay); backdrop-filter: blur(2px)
   .search button { padding-inline: var(--space-2); }
   .refresh-button { padding-inline: var(--space-2); }
   .directory-actions { display: grid; grid-template-columns: 1fr 1fr; }
-  .directory-actions .upload-shortcut { grid-column: 1 / -1; width: 100%; }
+  .directory-actions .upload-shortcut { width: 100%; margin-left: 0; }
 }
 @media (hover: none) { .expand { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {

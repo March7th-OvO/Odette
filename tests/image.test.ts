@@ -1,7 +1,9 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { ImageRepository } from '../worker/repositories/image.repository';
+import { FolderRepository } from '../worker/repositories/folder.repository';
 import app from '../worker/index';
 import { validateImage } from '../worker/services/image.service';
+import { normalizeFolderName } from '../worker/services/folder.service';
 import { createKey, validKey, validPrefix } from '../worker/utils/key';
 import { MAX_FILE_SIZE } from '../shared/image';
 
@@ -125,6 +127,93 @@ describe('folder markers', () => {
     const { data } = await next.json();
     expect(data.items[0].key).toBe('image/photo.jpg');
     expect(data.cursor).toBeNull();
+  });
+});
+
+describe('folder creation', () => {
+  afterEach(() => vi.restoreAllMocks());
+  const env = { APP_ENV: 'development', PUBLIC_IMAGE_URL: 'https://img.odette.moe' } as Env;
+  const marker = (key: string) => ({
+    key, size: 0, uploaded: new Date('2026-09-08'), etag: 'test', httpEtag: '"test"',
+    version: 'test', checksums: {}, storageClass: 'Standard' as const,
+    customMetadata: { type: 'folder' },
+  });
+
+  it('normalizes safe names and rejects anything other than one path segment', () => {
+    expect(normalizeFolderName(' 角色立绘 ')).toBe('角色立绘');
+    expect(normalizeFolderName('background images')).toBe('background images');
+    for (const name of ['', ' ', '.', '..', 'abc/def', 'abc\\def', 'line\nbreak']) {
+      expect(() => normalizeFolderName(name)).toThrow('文件夹名称无效');
+    }
+  });
+
+  it('creates an empty marker in the image root', async () => {
+    const exists = vi.spyOn(FolderRepository.prototype, 'folderExists').mockResolvedValue(false);
+    const create = vi.spyOn(FolderRepository.prototype, 'createFolder').mockResolvedValue(marker('image/2026/'));
+    const response = await app.request('http://localhost/api/folders', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parentPrefix: 'image/', name: ' 2026 ' }),
+    }, env);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ code: 200, data: { name: '2026', prefix: 'image/2026/' } });
+    expect(exists).toHaveBeenCalledExactlyOnceWith('image/2026/');
+    expect(create).toHaveBeenCalledExactlyOnceWith('image/2026/');
+  });
+
+  it('requires a logical parent outside the image root', async () => {
+    const exists = vi.spyOn(FolderRepository.prototype, 'folderExists').mockResolvedValue(false);
+    const create = vi.spyOn(FolderRepository.prototype, 'createFolder').mockResolvedValue(null);
+    const response = await app.request('http://localhost/api/folders', {
+      method: 'POST', body: JSON.stringify({ parentPrefix: 'image/missing/', name: 'child' }),
+    }, env);
+    expect(response.status).toBe(404);
+    expect(exists).toHaveBeenCalledExactlyOnceWith('image/missing/');
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a folder when its marker or any child object already exists', async () => {
+    const exists = vi.spyOn(FolderRepository.prototype, 'folderExists').mockResolvedValue(true);
+    const create = vi.spyOn(FolderRepository.prototype, 'createFolder').mockResolvedValue(null);
+    const response = await app.request('http://localhost/api/folders', {
+      method: 'POST', body: JSON.stringify({ parentPrefix: 'image/', name: 'PhotoWall' }),
+    }, env);
+    expect(response.status).toBe(409);
+    expect(exists).toHaveBeenCalledWith('image/PhotoWall/');
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('maps a failed conditional write to a conflict', async () => {
+    vi.spyOn(FolderRepository.prototype, 'folderExists').mockResolvedValue(false);
+    vi.spyOn(FolderRepository.prototype, 'createFolder').mockResolvedValue(null);
+    const response = await app.request('http://localhost/api/folders', {
+      method: 'POST', body: JSON.stringify({ parentPrefix: 'image/', name: 'racing' }),
+    }, env);
+    expect(response.status).toBe(409);
+  });
+
+  it('validates the request before accessing R2', async () => {
+    const exists = vi.spyOn(FolderRepository.prototype, 'folderExists').mockResolvedValue(false);
+    for (const body of [
+      '{',
+      JSON.stringify({ name: '2026' }),
+      JSON.stringify({ parentPrefix: 'private/', name: '2026' }),
+      JSON.stringify({ parentPrefix: 'image/', name: '../2026' }),
+    ]) {
+      expect((await app.request('http://localhost/api/folders', { method: 'POST', body }, env)).status).toBe(400);
+    }
+    expect(exists).not.toHaveBeenCalled();
+  });
+
+  it('uses prefix lookup and a conditional zero-byte marker write', async () => {
+    const list = vi.fn().mockResolvedValue({ objects: [{ key: 'image/foo/a.png' }] });
+    const put = vi.fn().mockResolvedValue(marker('image/foo/'));
+    const repository = new FolderRepository({ list, put } as unknown as R2Bucket);
+    await expect(repository.folderExists('image/foo/')).resolves.toBe(true);
+    await repository.createFolder('image/foo/');
+    expect(list).toHaveBeenCalledWith({ prefix: 'image/foo/', limit: 1 });
+    expect(put).toHaveBeenCalledWith('image/foo/', new Uint8Array(0), {
+      onlyIf: { etagDoesNotMatch: '*' }, customMetadata: { type: 'folder' },
+    });
   });
 });
 

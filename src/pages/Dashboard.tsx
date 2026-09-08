@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowLeft, CheckCircle2, ChevronRight, Folder, Image, Images, Loader2, RefreshCw, ShieldCheck, Upload, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, CheckCircle2, ChevronRight, Folder, FolderPlus, Image, Images, Loader2, RefreshCw, ShieldCheck, Upload, X } from 'lucide-react';
 import { IMAGE_PREFIX, IMAGE_TYPES, MAX_FILE_SIZE, type ImageItem } from '../../shared/image';
-import { deleteImage, listImages, uploadImage } from '../api/image';
+import { createFolder, deleteImage, listImages, uploadImage } from '../api/image';
 import { UploadArea } from '../components/UploadArea';
 import { ImageGrid } from '../components/ImageGrid';
 import { CopyButton } from '../components/CopyButton';
@@ -35,9 +35,14 @@ export function Dashboard() {
   const [preview, setPreview] = useState<ImageItem | null>(null);
   const [deleting, setDeleting] = useState<ImageItem | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const [folderName, setFolderName] = useState('');
+  const [folderBusy, setFolderBusy] = useState(false);
+  const [folderError, setFolderError] = useState('');
   const [uploadResults, setUploadResults] = useState<string[]>([]);
   const generation = useRef(0);
   const dialog = useRef<HTMLDialogElement>(null);
+  const folderInput = useRef<HTMLInputElement>(null);
   const message = (e: unknown) => e instanceof Error ? e.message : '操作失败，请重试';
 
   useEffect(() => {
@@ -47,7 +52,37 @@ export function Dashboard() {
     listImages(currentPrefix, undefined, controller.signal).then(page => { setImages(page.items); setFolders(page.folders); setCursor(page.cursor); }).catch(e => { if (!controller.signal.aborted) setError(message(e)); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [currentPrefix, revision]);
-  useEffect(() => { if (preview || deleting) dialog.current?.showModal(); else dialog.current?.close(); }, [preview, deleting]);
+  useEffect(() => {
+    if (preview || deleting || creatingFolder) {
+      dialog.current?.showModal();
+      if (creatingFolder) requestAnimationFrame(() => folderInput.current?.focus());
+    } else dialog.current?.close();
+  }, [preview, deleting, creatingFolder]);
+
+  function closeDialog() {
+    if (deleteBusy || folderBusy) return;
+    setPreview(null); setDeleting(null); setCreatingFolder(false); setFolderError('');
+  }
+
+  function openCreateFolder() {
+    setFolderName(''); setFolderError(''); setCreatingFolder(true);
+  }
+
+  async function submitFolder(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (folderBusy) return;
+    setFolderBusy(true); setFolderError(''); setNotice('');
+    try {
+      const folder = await createFolder(currentPrefix, folderName);
+      setNotice(`已创建文件夹 ${folder.name}`);
+      setCreatingFolder(false); setFolderName('');
+      setRevision(value => value + 1);
+    } catch (e) {
+      setFolderError(message(e));
+    } finally {
+      setFolderBusy(false);
+    }
+  }
 
   async function loadMore() {
     if (!cursor || loading) return;
@@ -104,6 +139,7 @@ export function Dashboard() {
           </nav>
           <div className="directory-actions">
             <button disabled={currentPrefix === IMAGE_PREFIX || loading} onClick={() => setCurrentPrefix(parentPrefix(currentPrefix))}><ArrowLeft size={15}/>返回</button>
+            <button disabled={loading} onClick={openCreateFolder}><FolderPlus size={15}/>新建文件夹</button>
             <button className="refresh-button" disabled={loading} onClick={() => setRevision(value => value + 1)}><RefreshCw size={15} className={loading ? 'spin' : ''}/>刷新</button>
             <a className="primary upload-shortcut" href="#upload"><Upload size={15}/>上传图片</a>
           </div>
@@ -120,10 +156,20 @@ export function Dashboard() {
       <footer><span>Odette <span className="footer-separator">/</span> 你的图片，你的空间。</span><span>原图保存 · 链接分享</span></footer>
     </main>
     </div>
-    <dialog ref={dialog} aria-label={preview ? '图片预览' : '删除图片确认'} onCancel={() => { setPreview(null); setDeleting(null); }} onClick={event => { if (event.target === event.currentTarget && !deleteBusy) { setPreview(null); setDeleting(null); } }}>
-      <button className="dialog-close icon-button" disabled={deleteBusy} aria-label="关闭弹窗" onClick={() => { setPreview(null); setDeleting(null); }}><X size={21}/></button>
+    <dialog ref={dialog} aria-label={preview ? '图片预览' : deleting ? '删除图片确认' : '新建文件夹'} onCancel={event => { if (deleteBusy || folderBusy) event.preventDefault(); else closeDialog(); }} onClick={event => { if (event.target === event.currentTarget) closeDialog(); }}>
+      <button className="dialog-close icon-button" disabled={deleteBusy || folderBusy} aria-label="关闭弹窗" onClick={closeDialog}><X size={21}/></button>
       {preview && <div className="preview"><img src={preview.url} alt={preview.originalName}/><h3>{preview.originalName}</h3><p>{formatSize(preview.size)} · {preview.contentType}</p><input aria-label="图片公开链接" value={preview.url} readOnly onFocus={event => event.target.select()}/><div className="preview-actions"><CopyButton value={preview.url}/><CopyButton value={`![](${preview.url})`} markdown/></div></div>}
       {deleting && <div className="confirm"><p className="eyebrow">DELETE IMAGE</p><h2>删除这张图片？</h2><p className="delete-name">{deleting.originalName}</p><p>删除后无法恢复，使用该图片的链接将失效。已缓存的副本可能暂时仍可访问。</p><div className="confirm-actions"><button disabled={deleteBusy} onClick={() => setDeleting(null)}>保留图片</button><button className="danger" disabled={deleteBusy} onClick={() => { void remove(); }}>{deleteBusy ? '正在删除…' : '确认删除'}</button></div></div>}
+      {creatingFolder && <form className="create-folder" onSubmit={event => { void submitFolder(event); }}>
+        <p className="eyebrow">NEW FOLDER</p>
+        <h2>新建文件夹</h2>
+        <label>当前目录<span className="current-directory" title={currentPrefix}>{currentPrefix}</span></label>
+        <label htmlFor="folder-name">文件夹名称</label>
+        <input ref={folderInput} id="folder-name" value={folderName} onChange={event => { setFolderName(event.target.value); setFolderError(''); }} placeholder="例如：2026" maxLength={255} autoComplete="off" aria-invalid={Boolean(folderError)} aria-describedby={folderError ? 'folder-error' : undefined}/>
+        <p className="field-hint">名称只能表示一级目录，不能包含 / 或 \\。</p>
+        {folderError && <p className="field-error" id="folder-error" role="alert">{folderError}</p>}
+        <div className="confirm-actions"><button type="button" disabled={folderBusy} onClick={closeDialog}>取消</button><button className="primary" type="submit" disabled={folderBusy || !folderName.trim()}>{folderBusy ? <><Loader2 className="spin" size={15}/>正在创建…</> : '创建'}</button></div>
+      </form>}
     </dialog>
   </div>;
 }
