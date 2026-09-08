@@ -11,9 +11,9 @@
   "r2_buckets": [{ "binding": "IMAGE_BUCKET", "bucket_name": "march7th-assets" }],
   "vars": {
     "APP_ENV": "production",
-    "PUBLIC_IMAGE_URL": "https://img.example.com",
-    "ACCESS_TEAM_DOMAIN": "",
-    "ACCESS_AUD": ""
+    "PUBLIC_IMAGE_URL": "https://img.odette.moe",
+    "ACCESS_TEAM_DOMAIN": "huxiaotao.cloudflareaccess.com",
+    "ACCESS_AUD": "600edd00082cd93b73c7a279ca252cf653b80191f1d7e476a0b6f050a584d9e5"
   },
   "env": {
     "development": {
