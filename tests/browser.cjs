@@ -31,9 +31,9 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
     await page.waitForFunction(() => { const img = document.querySelector('.preview img'); return img?.complete && img.naturalWidth > 0; });
     await page.getByRole('button',{name:'关闭弹窗'}).click();
     const filter = page.getByLabel('按对象路径前缀筛选');
-    await filter.fill('images/no-match'); await page.getByRole('button',{name:'筛选',exact:true}).click();
+    await filter.fill('image/no-match'); await page.getByRole('button',{name:'筛选',exact:true}).click();
     await page.getByText('这个路径下还没有图片').waitFor();
-    await filter.fill('images/'); await page.getByRole('button',{name:'筛选',exact:true}).click();
+    await filter.fill('image/'); await page.getByRole('button',{name:'筛选',exact:true}).click();
     await card.waitFor();
     fs.mkdirSync('.wrangler/qa',{recursive:true});
     await page.screenshot({path:'.wrangler/qa/desktop.png',fullPage:true});

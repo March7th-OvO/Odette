@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUpRight, CheckCircle2, ChevronRight, Image, Loader2, RefreshCw, Search, X } from 'lucide-react';
-import { IMAGE_TYPES, MAX_FILE_SIZE, type ImageItem } from '../../shared/image';
+import { IMAGE_PREFIX, IMAGE_TYPES, MAX_FILE_SIZE, type ImageItem } from '../../shared/image';
 import { deleteImage, listImages, uploadImage } from '../api/image';
 import { UploadArea } from '../components/UploadArea';
 import { ImageGrid } from '../components/ImageGrid';
@@ -9,8 +9,8 @@ import { formatSize } from '../components/ImageCard';
 
 export function Dashboard() {
   const [images, setImages] = useState<ImageItem[]>([]);
-  const [prefix, setPrefix] = useState('images/');
-  const [filter, setFilter] = useState('images/');
+  const [prefix, setPrefix] = useState(IMAGE_PREFIX);
+  const [filter, setFilter] = useState(IMAGE_PREFIX);
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -72,10 +72,10 @@ export function Dashboard() {
       <UploadArea busy={uploading} onFiles={files => { void upload(files); }}/>
       {notice && <div className="notice" role="status"><CheckCircle2 size={17}/>{notice}<button className="icon-button" aria-label="关闭提示" onClick={() => setNotice('')}><X size={15}/></button></div>}
       {uploadResults.length > 0 && <details className="upload-results"><summary>{uploading ? '上传进行中' : '查看上传结果'} · {uploadResults.length} 个文件</summary><ul>{uploadResults.map((result, index) => <li key={index}>{result}</li>)}</ul></details>}
-      <section className="library"><div className="library-toolbar"><h2>所有图片 <span>{images.length}{cursor ? '+' : ''}</span></h2><form className="search" onSubmit={event => { event.preventDefault(); setFilter(prefix.trim() || 'images/'); setRevision(value => value + 1); }}><Search size={16}/><input aria-label="按对象路径前缀筛选" value={prefix} onChange={event => setPrefix(event.target.value)} placeholder="按路径前缀筛选"/><button type="submit">筛选</button></form><button className="refresh-button" disabled={loading} onClick={() => setRevision(value => value + 1)}><RefreshCw size={15} className={loading ? 'spin' : ''}/>刷新</button></div>
+      <section className="library"><div className="library-toolbar"><h2>所有图片 <span>{images.length}{cursor ? '+' : ''}</span></h2><form className="search" onSubmit={event => { event.preventDefault(); setFilter(prefix.trim() || IMAGE_PREFIX); setRevision(value => value + 1); }}><Search size={16}/><input aria-label="按对象路径前缀筛选" value={prefix} onChange={event => setPrefix(event.target.value)} placeholder="按路径前缀筛选"/><button type="submit">筛选</button></form><button className="refresh-button" disabled={loading} onClick={() => setRevision(value => value + 1)}><RefreshCw size={15} className={loading ? 'spin' : ''}/>刷新</button></div>
         <div className="library-caption"><span>按对象路径排列 · 已加载 {images.length} 张</span><span>原图保存，无损分享 <ArrowUpRight size={12}/></span></div>
         {error && <div className="error" role="alert">{error}<button onClick={() => setRevision(value => value + 1)}>重试</button></div>}
-        {!images.length && loading ? <div className="empty"><Loader2 className="spin"/><h3>正在打开图片库…</h3></div> : !images.length && !error ? <div className="empty"><div className="empty-icon"><Image size={32} strokeWidth={1}/></div><p className="eyebrow">ROOM FOR SOMETHING BEAUTIFUL</p><h3>{filter === 'images/' ? '第一张图片，从这里开始' : '这个路径下还没有图片'}</h3><p>{filter === 'images/' ? '上传一张喜欢的图片，即可获得随处使用的链接。' : '试试其他路径前缀，或清空筛选查看所有图片。'}</p></div> : <ImageGrid images={images} onPreview={setPreview} onDelete={setDeleting}/>}
+        {!images.length && loading ? <div className="empty"><Loader2 className="spin"/><h3>正在打开图片库…</h3></div> : !images.length && !error ? <div className="empty"><div className="empty-icon"><Image size={32} strokeWidth={1}/></div><p className="eyebrow">ROOM FOR SOMETHING BEAUTIFUL</p><h3>{filter === IMAGE_PREFIX ? '第一张图片，从这里开始' : '这个路径下还没有图片'}</h3><p>{filter === IMAGE_PREFIX ? '上传一张喜欢的图片，即可获得随处使用的链接。' : '试试其他路径前缀，或清空筛选查看所有图片。'}</p></div> : <ImageGrid images={images} onPreview={setPreview} onDelete={setDeleting}/>}
         {cursor && <div className="pagination"><button disabled={loading} onClick={() => { void loadMore(); }}>{loading ? <Loader2 className="spin" size={16}/> : <ArrowDown size={16}/>}加载更多</button></div>}
       </section>
       <footer><span><span className="footer-dot"/> ODETTE · 留住每一帧灵感</span><span>你的图片，你的空间。</span></footer>

@@ -1,5 +1,5 @@
 import { HTTPException } from 'hono/http-exception';
-import { IMAGE_TYPES, MAX_FILE_SIZE, type ImageItem } from '../../shared/image';
+import { IMAGE_PREFIX, IMAGE_TYPES, MAX_FILE_SIZE, type ImageItem } from '../../shared/image';
 import { ImageRepository } from '../repositories/image.repository';
 import { createKey, validKey } from '../utils/key';
 import { badRequest } from '../utils/response';
@@ -30,7 +30,7 @@ export class ImageService {
       size: object.size, contentType: object.httpMetadata?.contentType || 'application/octet-stream', uploaded: object.uploaded.toISOString() };
   }
   async list(prefix: string, limit: number, cursor?: string) {
-    if (!prefix.startsWith('images/') || prefix.length > 1024) badRequest('Prefix 必须以 images/ 开头且不超过 1024 字符');
+    if (!prefix.startsWith(IMAGE_PREFIX) || new TextEncoder().encode(prefix).length > 1024) badRequest(`Prefix 必须以 ${IMAGE_PREFIX} 开头且不超过 1024 字节`);
     if (!Number.isInteger(limit) || limit < 1 || limit > 100) badRequest('limit 必须为 1–100 的整数');
     if (cursor && cursor.length > 4096) badRequest('分页游标无效');
     const result = await this.repository.list(prefix, limit, cursor);

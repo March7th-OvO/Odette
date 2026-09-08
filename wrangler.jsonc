@@ -18,7 +18,7 @@
   "env": {
     "development": {
       "vars": { "APP_ENV": "development", "PUBLIC_IMAGE_URL": "http://127.0.0.1:8787/api/local-images", "ACCESS_TEAM_DOMAIN": "", "ACCESS_AUD": "" },
-      "r2_buckets": [{ "binding": "IMAGE_BUCKET", "bucket_name": "image-host" }]
+      "r2_buckets": [{ "binding": "IMAGE_BUCKET", "bucket_name": "march7th-assets" }]
     }
   }
 }
