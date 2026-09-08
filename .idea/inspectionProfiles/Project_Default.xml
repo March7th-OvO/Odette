@@ -1,0 +1,26 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="Eslint" enabled="true" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <list>
+          <option value="langchain" />
+          <option value="langchain-community" />
+          <option value="langchain-openai" />
+          <option value="openai" />
+          <option value="requests" />
+          <option value="python-dotenv" />
+          <option value="pydantic" />
+          <option value="fastapi" />
+          <option value="uvicorn" />
+          <option value="aiohttp" />
+          <option value="tenacity" />
+          <option value="tqdm" />
+          <option value="httpx" />
+        </list>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyTypeCheckerInspection" enabled="false" level="WARNING" enabled_by_default="false" />
+  </profile>
+</component>
