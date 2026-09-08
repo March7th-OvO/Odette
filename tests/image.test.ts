@@ -57,6 +57,38 @@ describe('legacy image namespace', () => {
   });
 });
 
+describe('folder markers', () => {
+  afterEach(() => vi.restoreAllMocks());
+  const env = { APP_ENV: 'development', PUBLIC_IMAGE_URL: 'https://img.odette.moe' } as Env;
+  const object = (key: string, size: number) => ({
+    key, size, uploaded: new Date('2026-09-08'), etag: 'test', httpEtag: '"test"',
+    version: 'test', checksums: {}, storageClass: 'Standard' as const,
+  });
+  it('hides only zero-byte objects whose keys end with a slash', async () => {
+    vi.spyOn(ImageRepository.prototype, 'list').mockResolvedValue({
+      objects: [object('image/', 0), object('image/PhotoWall/', 0), object('image/PhotoWall/photo.jpg', 100), object('image/empty.png', 0), object('image/nonempty/', 100)],
+      truncated: false, delimitedPrefixes: [],
+    });
+    const response = await app.request('http://localhost/api/images', {}, env);
+    expect(response.status).toBe(200);
+    const { data } = await response.json();
+    expect(data.items.map((item: { key: string }) => item.key)).toEqual(['image/PhotoWall/photo.jpg', 'image/empty.png', 'image/nonempty/']);
+    expect(data.cursor).toBeNull();
+  });
+  it('retains the cursor on a marker-only page so the next image remains reachable', async () => {
+    const list = vi.spyOn(ImageRepository.prototype, 'list')
+      .mockResolvedValueOnce({ objects: [object('image/PhotoWall/', 0)], truncated: true, cursor: 'next-page', delimitedPrefixes: [] })
+      .mockResolvedValueOnce({ objects: [object('image/PhotoWall/photo.jpg', 100)], truncated: false, delimitedPrefixes: [] });
+    const first = await app.request('http://localhost/api/images?limit=1', {}, env);
+    expect((await first.json()).data).toEqual({ items: [], cursor: 'next-page' });
+    const next = await app.request('http://localhost/api/images?limit=1&cursor=next-page', {}, env);
+    expect(list).toHaveBeenLastCalledWith('image/', 1, 'next-page');
+    const { data } = await next.json();
+    expect(data.items[0].key).toBe('image/PhotoWall/photo.jpg');
+    expect(data.cursor).toBeNull();
+  });
+});
+
 describe('API boundary', () => {
   const env = { APP_ENV: 'development' } as Env;
   it('keeps health available but fails closed when Access is unconfigured', async () => {

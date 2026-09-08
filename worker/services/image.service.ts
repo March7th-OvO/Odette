@@ -34,7 +34,9 @@ export class ImageService {
     if (!Number.isInteger(limit) || limit < 1 || limit > 100) badRequest('limit 必须为 1–100 的整数');
     if (cursor && cursor.length > 4096) badRequest('分页游标无效');
     const result = await this.repository.list(prefix, limit, cursor);
-    return { items: result.objects.map(item => this.serialize(item)), cursor: result.truncated ? result.cursor : null };
+    // 目录占位对象不作为图片展示；保留 R2 原始游标，即使本页全是占位对象也能继续翻页。
+    const images = result.objects.filter(item => !(item.size === 0 && item.key.endsWith('/')));
+    return { items: images.map(item => this.serialize(item)), cursor: result.truncated ? result.cursor : null };
   }
   async upload(file: File) {
     await validateImage(file);

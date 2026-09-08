@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-打开 http://127.0.0.1:5173 。Vite 将 `/api/*` 转发到本地 Worker（8787）；R2 使用本地持久化模拟存储 `.wrangler/state`，不会写入线上桶。本地图片使用仅在 development 环境生效的 `/api/local-images/*` 预览地址。本地复制的链接仅供本机开发使用。第一次启动会自动创建静态资源目录，无需先构建。
+打开 http://127.0.0.1:5173 。Vite 将 `/api/*` 转发到本地 Worker（8787）；开发环境的 `IMAGE_BUCKET` 使用远程绑定，直接读取和修改线上 `march7th-assets` 桶，图片通过 R2 自定义域名预览。第一次启动会自动创建静态资源目录，无需先构建。
 
 Windows PowerShell 如果阻止运行 npm.ps1，请使用 `npm.cmd` / `npx.cmd`。
 
@@ -28,7 +28,7 @@ npx wrangler deploy --dry-run   # 验证生产 Worker 打包
 
 仅管理 `march7th-assets` 桶的 `image/` 命名空间：读取该前缀下的所有对象，新上传使用 `image/YYYY/MM/UUID.ext`，删除兼容 `image/banner.webp`、`image/march7th/avatar.png` 等旧路径，无需迁移现有对象。删除 Key 限制在 `image/` 内、UTF-8 最长 1024 字节，不接受空路径段、`.` / `..` 路径段、反斜杠或控制字符。HTTP 接口路径仍为 `/api/images`。
 
-开发环境的模拟桶名也统一为 `march7th-assets`，仍然只读写本地模拟存储。旧 `image-host` 模拟数据不会自动迁移；这不影响线上 R2 对象。
+开发环境直接连接线上 `march7th-assets` 桶，不再使用 `.wrangler/state` 中的模拟数据；在本地上传和删除都会同步影响线上对象。
 
 - 拖拽与多选上传，逐个上传并报告每个文件的成功或失败。
 - JPEG、PNG、WebP、AVIF、GIF，单张最多 10 MiB；拒绝 SVG、空文件与明显不匹配的文件签名。

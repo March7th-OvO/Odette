@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowUpRight, CheckCircle2, ChevronRight, Image, Loader2, RefreshCw, Search, X } from 'lucide-react';
+import { ArrowDown, CheckCircle2, ChevronRight, Folder, Image, Images, Loader2, RefreshCw, Search, ShieldCheck, Upload, X } from 'lucide-react';
 import { IMAGE_PREFIX, IMAGE_TYPES, MAX_FILE_SIZE, type ImageItem } from '../../shared/image';
 import { deleteImage, listImages, uploadImage } from '../api/image';
 import { UploadArea } from '../components/UploadArea';
 import { ImageGrid } from '../components/ImageGrid';
 import { CopyButton } from '../components/CopyButton';
 import { formatSize } from '../components/ImageCard';
+import { Sidebar } from '../components/Sidebar';
+import { ImageGridSkeleton } from '../components/ImageGridSkeleton';
 
 export function Dashboard() {
   const [images, setImages] = useState<ImageItem[]>([]);
@@ -66,21 +68,28 @@ export function Dashboard() {
     finally { setDeleteBusy(false); }
   }
   return <div className="app-shell">
-    <header className="topbar"><a className="brand" href="/" aria-label="Odette 首页"><span className="brand-mark">o</span>odette<span className="brand-label">私人图床</span></a><div className="private-badge"><span/> 个人图片空间</div></header>
-    <main><div className="breadcrumb">工作空间<ChevronRight size={13}/><span>图片库</span></div>
-      <div className="page-heading"><div><p className="eyebrow">YOUR PERSONAL IMAGE LIBRARY</p><h1>图片库<span>.</span></h1><p>收藏灵感，分享画面。你的图片，随时可用。</p></div><span className="heading-aside">Less clutter.<br/><em>More clarity.</em></span></div>
+    <a className="skip-link" href="#main-content">跳转到主要内容</a>
+    <Sidebar/>
+    <div className="workspace">
+    <header className="topbar"><div className="workspace-label"><Images size={17}/><span>工作空间</span><ChevronRight size={13}/><strong>图片库</strong></div><div className="private-badge"><ShieldCheck size={15}/> 个人图片空间</div></header>
+    <main id="main-content">
+      <div className="page-heading"><div><p className="eyebrow">MEDIA LIBRARY</p><h1>图片库</h1><p>管理、浏览和分享你的图片资源。</p></div><span className="heading-aside"><span className="soft-badge">原图存储</span><span>清晰保存，自由分享</span></span></div>
       <UploadArea busy={uploading} onFiles={files => { void upload(files); }}/>
       {notice && <div className="notice" role="status"><CheckCircle2 size={17}/>{notice}<button className="icon-button" aria-label="关闭提示" onClick={() => setNotice('')}><X size={15}/></button></div>}
       {uploadResults.length > 0 && <details className="upload-results"><summary>{uploading ? '上传进行中' : '查看上传结果'} · {uploadResults.length} 个文件</summary><ul>{uploadResults.map((result, index) => <li key={index}>{result}</li>)}</ul></details>}
-      <section className="library"><div className="library-toolbar"><h2>所有图片 <span>{images.length}{cursor ? '+' : ''}</span></h2><form className="search" onSubmit={event => { event.preventDefault(); setFilter(prefix.trim() || IMAGE_PREFIX); setRevision(value => value + 1); }}><Search size={16}/><input aria-label="按对象路径前缀筛选" value={prefix} onChange={event => setPrefix(event.target.value)} placeholder="按路径前缀筛选"/><button type="submit">筛选</button></form><button className="refresh-button" disabled={loading} onClick={() => setRevision(value => value + 1)}><RefreshCw size={15} className={loading ? 'spin' : ''}/>刷新</button></div>
-        <div className="library-caption"><span>按对象路径排列 · 已加载 {images.length} 张</span><span>原图保存，无损分享 <ArrowUpRight size={12}/></span></div>
+      <section className="library" id="library" aria-labelledby="library-title">
+        <div className="library-header"><h2 id="library-title"><Images size={18}/>所有图片 <span className="count-badge">{images.length}{cursor ? '+' : ''}</span></h2><span className="view-label">网格视图</span></div>
+        <div className="library-toolbar"><div className="breadcrumb" aria-label="当前对象路径"><Folder size={16}/><span>图片库</span><ChevronRight size={13}/><strong title={filter}>{filter}</strong></div><form className="search" onSubmit={event => { event.preventDefault(); setFilter(prefix.trim() || IMAGE_PREFIX); setRevision(value => value + 1); }}><Search size={16}/><input aria-label="按对象路径前缀筛选" value={prefix} onChange={event => setPrefix(event.target.value)} placeholder="按路径前缀筛选"/><button type="submit">筛选</button></form><button className="refresh-button" disabled={loading} onClick={() => setRevision(value => value + 1)}><RefreshCw size={15} className={loading ? 'spin' : ''}/>刷新</button></div>
+        <div className="library-body"><div className="library-caption"><span>按对象路径排列</span><span>已加载 {images.length} 张图片</span></div>
         {error && <div className="error" role="alert">{error}<button onClick={() => setRevision(value => value + 1)}>重试</button></div>}
-        {!images.length && loading ? <div className="empty"><Loader2 className="spin"/><h3>正在打开图片库…</h3></div> : !images.length && !error ? <div className="empty"><div className="empty-icon"><Image size={32} strokeWidth={1}/></div><p className="eyebrow">ROOM FOR SOMETHING BEAUTIFUL</p><h3>{filter === IMAGE_PREFIX ? '第一张图片，从这里开始' : '这个路径下还没有图片'}</h3><p>{filter === IMAGE_PREFIX ? '上传一张喜欢的图片，即可获得随处使用的链接。' : '试试其他路径前缀，或清空筛选查看所有图片。'}</p></div> : <ImageGrid images={images} onPreview={setPreview} onDelete={setDeleting}/>}
+        {!images.length && loading ? <ImageGridSkeleton/> : !images.length && !error ? <div className="empty"><div className="empty-icon"><Image size={30} strokeWidth={1.5}/></div><h3>{filter === IMAGE_PREFIX ? '第一张图片，从这里开始' : '这个路径下还没有图片'}</h3><p>{filter === IMAGE_PREFIX ? '上传图片后，即可在这里浏览、复制链接和分享。' : '试试其他路径前缀，或清空筛选查看所有图片。'}</p><a className="empty-upload" href="#upload"><Upload size={15}/>前往上传图片</a></div> : <ImageGrid images={images} onPreview={setPreview} onDelete={setDeleting}/>}
         {cursor && <div className="pagination"><button disabled={loading} onClick={() => { void loadMore(); }}>{loading ? <Loader2 className="spin" size={16}/> : <ArrowDown size={16}/>}加载更多</button></div>}
+        </div>
       </section>
-      <footer><span><span className="footer-dot"/> ODETTE · 留住每一帧灵感</span><span>你的图片，你的空间。</span></footer>
+      <footer><span>Odette <span className="footer-separator">/</span> 你的图片，你的空间。</span><span>原图保存 · 链接分享</span></footer>
     </main>
-    <dialog ref={dialog} onCancel={() => { setPreview(null); setDeleting(null); }} onClick={event => { if (event.target === event.currentTarget && !deleteBusy) { setPreview(null); setDeleting(null); } }}>
+    </div>
+    <dialog ref={dialog} aria-label={preview ? '图片预览' : '删除图片确认'} onCancel={() => { setPreview(null); setDeleting(null); }} onClick={event => { if (event.target === event.currentTarget && !deleteBusy) { setPreview(null); setDeleting(null); } }}>
       <button className="dialog-close icon-button" disabled={deleteBusy} aria-label="关闭弹窗" onClick={() => { setPreview(null); setDeleting(null); }}><X size={21}/></button>
       {preview && <div className="preview"><img src={preview.url} alt={preview.originalName}/><h3>{preview.originalName}</h3><p>{formatSize(preview.size)} · {preview.contentType}</p><input aria-label="图片公开链接" value={preview.url} readOnly onFocus={event => event.target.select()}/><div className="preview-actions"><CopyButton value={preview.url}/><CopyButton value={`![](${preview.url})`} markdown/></div></div>}
       {deleting && <div className="confirm"><p className="eyebrow">DELETE IMAGE</p><h2>删除这张图片？</h2><p className="delete-name">{deleting.originalName}</p><p>删除后无法恢复，使用该图片的链接将失效。已缓存的副本可能暂时仍可访问。</p><div className="confirm-actions"><button disabled={deleteBusy} onClick={() => setDeleting(null)}>保留图片</button><button className="danger" disabled={deleteBusy} onClick={() => { void remove(); }}>{deleteBusy ? '正在删除…' : '确认删除'}</button></div></div>}

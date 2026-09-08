@@ -17,8 +17,9 @@
   },
   "env": {
     "development": {
-      "vars": { "APP_ENV": "development", "PUBLIC_IMAGE_URL": "http://127.0.0.1:8787/api/local-images", "ACCESS_TEAM_DOMAIN": "", "ACCESS_AUD": "" },
-      "r2_buckets": [{ "binding": "IMAGE_BUCKET", "bucket_name": "march7th-assets" }]
+      "vars": { "APP_ENV": "development", "PUBLIC_IMAGE_URL": "https://assets.march7th.moe", "ACCESS_TEAM_DOMAIN": "", "ACCESS_AUD": "" },
+      // 本地 Worker 直接使用线上桶，上传和删除也会作用于线上对象。
+      "r2_buckets": [{ "binding": "IMAGE_BUCKET", "bucket_name": "march7th-assets", "preview_bucket_name": "march7th-assets", "remote": true }]
     }
   }
 }
