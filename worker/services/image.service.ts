@@ -46,11 +46,16 @@ export class ImageService {
   async upload(file: File, prefix: string) {
     await validateImage(file);
     if (!validPrefix(prefix)) badRequest(`Prefix 必须是 ${IMAGE_PREFIX} 下以 / 结尾的安全目录路径`);
-    const key = createKey(IMAGE_TYPES[file.type as keyof typeof IMAGE_TYPES], prefix);
-    if (!validKey(key)) badRequest('当前目录路径过长，无法上传');
-    const object = await this.repository.put(key, file);
-    if (!object) throw new HTTPException(409, { message: '图片命名冲突，请重试' });
-    return this.serialize(object);
+    const ext = IMAGE_TYPES[file.type as keyof typeof IMAGE_TYPES];
+    // 先原子写入可读原名；同名时追加随机短后缀，既不覆盖旧文件，也不受并发检查竞态影响。
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const suffix = attempt === 0 ? '' : `-${crypto.randomUUID().replaceAll('-', '').slice(0, 6)}`;
+      const key = createKey(file.name, ext, prefix, suffix);
+      if (!validKey(key)) badRequest('当前目录路径过长，无法上传');
+      const object = await this.repository.put(key, file);
+      if (object) return this.serialize(object);
+    }
+    throw new HTTPException(409, { message: '图片命名冲突，请重试' });
   }
   async delete(key: string) {
     if (!validKey(key)) badRequest('图片 Key 无效');

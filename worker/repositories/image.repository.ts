@@ -6,7 +6,7 @@ export class ImageRepository {
   }
   put(key: string, file: File) {
     return this.bucket.put(key, file.stream(), {
-      // A conditional write prevents even an unlikely UUID collision from replacing an object.
+      // 条件写保证服务层尝试原文件名和冲突后缀时绝不会覆盖已有对象。
       onlyIf: { etagDoesNotMatch: '*' },
       httpMetadata: { contentType: file.type, cacheControl: 'public, max-age=31536000, immutable' },
       customMetadata: { originalName: file.name },

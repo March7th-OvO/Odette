@@ -4,7 +4,7 @@ import { FolderRepository } from '../worker/repositories/folder.repository';
 import app from '../worker/index';
 import { validateImage } from '../worker/services/image.service';
 import { normalizeFolderName } from '../worker/services/folder.service';
-import { createKey, validKey, validPrefix } from '../worker/utils/key';
+import { createKey, normalizeFileName, validKey, validPrefix } from '../worker/utils/key';
 import { MAX_FILE_SIZE } from '../shared/image';
 
 describe('image upload validation', () => {
@@ -17,11 +17,12 @@ describe('image upload validation', () => {
     await expect(validateImage(new File([], 'empty.jpg', {type:'image/jpeg'}))).rejects.toThrow('不能为空');
     await expect(validateImage(new File([new Uint8Array(MAX_FILE_SIZE + 1)], 'large.jpg', {type:'image/jpeg'}))).rejects.toThrow('10 MB');
   });
-  it('uses unique keys in the requested directory and rejects arbitrary deletion paths', () => {
-    const a = createKey('png'); const b = createKey('png');
-    expect(validKey(a)).toBe(true); expect(a).not.toBe(b);
-    expect(a).toMatch(/^image\/[a-f0-9-]{36}\.png$/);
-    expect(createKey('webp', 'image/PhotoWall/')).toMatch(/^image\/PhotoWall\/[a-f0-9-]{36}\.webp$/);
+  it('normalizes readable filenames and rejects arbitrary deletion paths', () => {
+    expect(normalizeFileName(' Furina Opera: Épiclese (4K).JPG', 'jpg')).toBe('furina-opera-épiclese-4k.jpg');
+    expect(normalizeFileName('芙宁娜 壁纸.png', 'png')).toBe('芙宁娜-壁纸.png');
+    expect(normalizeFileName('../✨.png', 'png')).toBe('image.png');
+    expect(createKey('Furina Wallpaper.JPG', 'jpg')).toBe('image/furina-wallpaper.jpg');
+    expect(createKey('Furina Wallpaper.JPG', 'jpg', 'image/PhotoWall/', '-a83f21')).toBe('image/PhotoWall/furina-wallpaper-a83f21.jpg');
     expect(validPrefix('image/')).toBe(true);
     expect(validPrefix('image/PhotoWall/')).toBe(true);
     expect(validPrefix('image/PhotoWall')).toBe(false);
@@ -84,8 +85,24 @@ describe('legacy image namespace', () => {
     body.append('prefix', 'image/PhotoWall/');
     const response = await app.request('http://localhost/api/images', { method: 'POST', body }, env);
     expect(response.status).toBe(200);
-    expect(put.mock.calls[0][0]).toMatch(/^image\/PhotoWall\/[a-f0-9-]{36}\.png$/);
+    expect(put.mock.calls[0][0]).toBe('image/PhotoWall/new.png');
     expect((await response.json()).data.key).toBe(put.mock.calls[0][0]);
+  });
+  it('adds a short hash when the readable filename already exists', async () => {
+    const put = vi.spyOn(ImageRepository.prototype, 'put')
+      .mockResolvedValueOnce(null)
+      .mockImplementation(async key => ({
+        key, size: 67, uploaded: new Date('2026-09-08'), etag: 'test', httpEtag: '"test"', version: 'test', checksums: {}, storageClass: 'Standard',
+        httpMetadata: { contentType: 'image/png' }, customMetadata: { originalName: 'Furina Wallpaper.PNG' },
+      }));
+    const body = new FormData();
+    body.append('file', new File([new Uint8Array([137,80,78,71,13,10,26,10])], 'Furina Wallpaper.PNG', { type: 'image/png' }));
+    body.append('prefix', 'image/furinafans.com/wallpaper/desktop/');
+    const response = await app.request('http://localhost/api/images', { method: 'POST', body }, env);
+    expect(response.status).toBe(200);
+    expect(put.mock.calls[0][0]).toBe('image/furinafans.com/wallpaper/desktop/furina-wallpaper.png');
+    expect(put.mock.calls[1][0]).toMatch(/^image\/furinafans\.com\/wallpaper\/desktop\/furina-wallpaper-[a-f0-9]{6}\.png$/);
+    expect((await response.json()).data.key).toBe(put.mock.calls[1][0]);
   });
   it('rejects an unsafe upload directory before writing to R2', async () => {
     const put = vi.spyOn(ImageRepository.prototype, 'put').mockResolvedValue(null);

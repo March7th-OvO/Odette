@@ -19,6 +19,35 @@ export function validKey(key: string) {
     && !/[\\\u0000-\u001f\u007f]/.test(key)
     && validSegments(key);
 }
-export function createKey(ext: string, prefix = IMAGE_PREFIX) {
-  return `${prefix}${crypto.randomUUID()}.${ext}`;
+
+/** 将原文件名转换为适合长期公开 URL 的可读名称，同时保留各语言的字母和数字。 */
+export function normalizeFileName(fileName: string, ext: string) {
+  const leafName = fileName.split(/[\\/]/).pop() || '';
+  const extensionIndex = leafName.lastIndexOf('.');
+  const rawStem = extensionIndex > 0 ? leafName.slice(0, extensionIndex) : leafName;
+  const stem = rawStem.normalize('NFKC').trim().toLocaleLowerCase('en-US')
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-+|-+$/g, '') || 'image';
+  return `${stem}.${ext}`;
+}
+
+function truncateUtf8(value: string, maxBytes: number) {
+  let result = '';
+  let bytes = 0;
+  for (const character of value) {
+    const characterBytes = new TextEncoder().encode(character).length;
+    if (bytes + characterBytes > maxBytes) break;
+    result += character;
+    bytes += characterBytes;
+  }
+  return result.replace(/-+$/g, '');
+}
+
+/** 根据目录的剩余 Key 空间裁剪文件名，避免多字节字符导致 R2 Key 超限。 */
+export function createKey(fileName: string, ext: string, prefix = IMAGE_PREFIX, suffix = '') {
+  const normalized = normalizeFileName(fileName, ext);
+  const stem = normalized.slice(0, -(ext.length + 1));
+  const fixedBytes = new TextEncoder().encode(`${prefix}${suffix}.${ext}`).length;
+  const safeStem = truncateUtf8(stem, 1024 - fixedBytes) || 'image';
+  return `${prefix}${safeStem}${suffix}.${ext}`;
 }
