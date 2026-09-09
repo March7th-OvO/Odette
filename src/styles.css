@@ -218,6 +218,15 @@ main { max-width: 1600px; margin: 0 auto; padding: var(--space-8); }
 .image-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4); }
 .image-card { min-width: 0; border: 1px solid var(--odette-border); border-radius: var(--radius-card); background: var(--odette-surface); overflow: hidden; transition: border-color var(--motion-duration) ease, box-shadow var(--motion-duration) ease; }
 .image-card:hover, .image-card:focus-within { border-color: var(--odette-accent); box-shadow: var(--shadow-sm); }
+/* Selection stays visible on touch screens and the batch controls wrap on narrow views. */
+.image-card { position: relative; }
+.image-card[data-selected='true'] { border-color: var(--odette-primary); box-shadow: 0 0 0 1px var(--odette-primary); }
+.image-select { position: absolute; top: var(--space-2); right: var(--space-2); z-index: 1; display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--odette-border); border-radius: var(--radius-control); background: var(--odette-surface); cursor: pointer; }
+.image-select input { width: 18px; height: 18px; margin: 0; accent-color: var(--odette-primary); cursor: pointer; }
+.batch-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-4); padding: var(--space-3); border-radius: var(--radius-control); background: var(--odette-surface-secondary); }
+.batch-toolbar>span { font-size: 12px; color: var(--odette-text-secondary); margin-right: var(--space-2); }
+.batch-toolbar .copy-button { min-height: 38px; padding: var(--space-2) var(--space-3); border-color: var(--odette-border); font-size: 13px; }
+.confirm .delete-list { max-height: 180px; overflow: auto; list-style: none; font-size: 13px; line-height: 1.8; }
 .thumbnail { display: block; position: relative; width: 100%; height: auto; aspect-ratio: 4 / 3; padding: 0; border: 0; border-bottom: 1px solid var(--odette-divider); border-radius: 0; background: repeating-conic-gradient(var(--odette-background) 0% 25%, var(--odette-surface-secondary) 0% 50%) 50% / 16px 16px; }
 .thumbnail img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .thumbnail:focus-visible { outline-offset: -4px; box-shadow: none; }

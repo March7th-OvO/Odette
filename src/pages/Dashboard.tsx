@@ -33,7 +33,9 @@ export function Dashboard() {
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
   const [preview, setPreview] = useState<ImageItem | null>(null);
-  const [deleting, setDeleting] = useState<ImageItem | null>(null);
+  const [deleting, setDeleting] = useState<ImageItem[] | null>(null);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const selectedImages = images.filter(image => selectedKeys.has(image.key));
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [folderName, setFolderName] = useState('');
@@ -49,6 +51,8 @@ export function Dashboard() {
     const controller = new AbortController();
     generation.current++;
     setLoading(true); setError(''); setImages([]); setFolders([]); setCursor(null);
+    // A refreshed or different directory starts a new selection; pagination preserves it.
+    setSelectedKeys(new Set());
     listImages(currentPrefix, undefined, controller.signal).then(page => { setImages(page.items); setFolders(page.folders); setCursor(page.cursor); }).catch(e => { if (!controller.signal.aborted) setError(message(e)); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [currentPrefix, revision]);
@@ -111,11 +115,27 @@ export function Dashboard() {
     if (count) setRevision(value => value + 1);
   }
   async function remove() {
-    if (!deleting) return;
-    setDeleteBusy(true);
-    try { await deleteImage(deleting.key); setNotice(`已删除 ${deleting.originalName}`); setDeleting(null); setRevision(value => value + 1); }
-    catch (e) { setError(message(e)); setDeleting(null); }
-    finally { setDeleteBusy(false); }
+    if (!deleting || deleteBusy) return;
+    setDeleteBusy(true); setError(''); setNotice('');
+    const removed = new Set<string>();
+    const failures: string[] = [];
+    // Bound requests and retain failed selections instead of clearing the entire batch.
+    for (const image of deleting) {
+      try { await deleteImage(image.key); removed.add(image.key); }
+      catch (e) { failures.push(`${image.originalName}：${message(e)}`); }
+    }
+    setImages(previous => previous.filter(image => !removed.has(image.key)));
+    setSelectedKeys(previous => new Set([...previous].filter(key => !removed.has(key))));
+    if (removed.size) setNotice(`已删除 ${removed.size} 张图片`);
+    if (failures.length) setError(`${failures.length} 张图片删除失败：${failures.join('；')}`);
+    setDeleting(null); setDeleteBusy(false);
+  }
+  function toggleSelection(key: string) {
+    setSelectedKeys(previous => {
+      const next = new Set(previous);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
   }
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">跳转到主要内容</a>
@@ -148,7 +168,18 @@ export function Dashboard() {
         {error && <div className="error" role="alert">{error}<button onClick={() => setRevision(value => value + 1)}>重试</button></div>}
         {!images.length && !folders.length && loading ? <ImageGridSkeleton/> : !images.length && !folders.length && !error ? <div className="empty"><div className="empty-icon"><Image size={30} strokeWidth={1.5}/></div><h3>当前目录还没有图片</h3><p>上传的图片会直接保存到 {currentPrefix}</p><a className="empty-upload" href="#upload"><Upload size={15}/>上传到当前目录</a></div> : <>
           <FolderGrid folders={folders} onOpen={setCurrentPrefix}/>
-          {images.length > 0 && <section className="image-section" aria-labelledby="image-section-title"><h3 id="image-section-title">图片</h3><ImageGrid images={images} onPreview={setPreview} onDelete={setDeleting}/></section>}
+          {images.length > 0 && <section className="image-section" aria-labelledby="image-section-title"><h3 id="image-section-title">图片</h3>
+            <div className="batch-toolbar" aria-label="图片批量操作">
+              <span role="status">已选择 {selectedImages.length} 张</span>
+              <button onClick={() => setSelectedKeys(new Set(images.map(image => image.key)))} disabled={selectedImages.length === images.length}>全选已加载图片</button>
+              <button onClick={() => setSelectedKeys(new Set())} disabled={!selectedImages.length}>取消选择</button>
+              {/* Preserve grid order and place each original URL or Markdown image on its own line. */}
+              <CopyButton value={selectedImages.map(image => image.url).join('\n')} disabled={!selectedImages.length} label="复制 URL"/>
+              <CopyButton value={selectedImages.map(image => `![](${image.url})`).join('\n')} markdown disabled={!selectedImages.length} label="复制 Markdown"/>
+              <button className="danger" disabled={!selectedImages.length} onClick={() => setDeleting(selectedImages)}>批量删除</button>
+            </div>
+            <ImageGrid images={images} onPreview={setPreview} onDelete={image => setDeleting([image])} selectedKeys={selectedKeys} onToggle={toggleSelection}/>
+          </section>}
         </>}
         {cursor && <div className="pagination"><button disabled={loading} onClick={() => { void loadMore(); }}>{loading ? <Loader2 className="spin" size={16}/> : <ArrowDown size={16}/>}加载更多</button></div>}
         </div>
@@ -159,7 +190,7 @@ export function Dashboard() {
     <dialog ref={dialog} aria-label={preview ? '图片预览' : deleting ? '删除图片确认' : '新建文件夹'} onCancel={event => { if (deleteBusy || folderBusy) event.preventDefault(); else closeDialog(); }} onClick={event => { if (event.target === event.currentTarget) closeDialog(); }}>
       <button className="dialog-close icon-button" disabled={deleteBusy || folderBusy} aria-label="关闭弹窗" onClick={closeDialog}><X size={21}/></button>
       {preview && <div className="preview"><img src={preview.url} alt={preview.originalName}/><h3>{preview.originalName}</h3><p>{formatSize(preview.size)} · {preview.contentType}</p><input aria-label="图片公开链接" value={preview.url} readOnly onFocus={event => event.target.select()}/><div className="preview-actions"><CopyButton value={preview.url}/><CopyButton value={`![](${preview.url})`} markdown/></div></div>}
-      {deleting && <div className="confirm"><p className="eyebrow">DELETE IMAGE</p><h2>删除这张图片？</h2><p className="delete-name">{deleting.originalName}</p><p>删除后无法恢复，使用该图片的链接将失效。已缓存的副本可能暂时仍可访问。</p><div className="confirm-actions"><button disabled={deleteBusy} onClick={() => setDeleting(null)}>保留图片</button><button className="danger" disabled={deleteBusy} onClick={() => { void remove(); }}>{deleteBusy ? '正在删除…' : '确认删除'}</button></div></div>}
+      {deleting && <div className="confirm"><p className="eyebrow">DELETE IMAGE</p><h2>{deleting.length === 1 ? '删除这张图片？' : `删除选中的 ${deleting.length} 张图片？`}</h2><ul className="delete-name delete-list">{deleting.map(image => <li key={image.key}>{image.originalName}</li>)}</ul><p>删除后无法恢复，使用该图片的链接将失效。已缓存的副本可能暂时仍可访问。</p><div className="confirm-actions"><button disabled={deleteBusy} onClick={() => setDeleting(null)}>保留图片</button><button className="danger" disabled={deleteBusy} onClick={() => { void remove(); }}>{deleteBusy ? '正在删除…' : '确认删除'}</button></div></div>}
       {creatingFolder && <form className="create-folder" onSubmit={event => { void submitFolder(event); }}>
         <p className="eyebrow">NEW FOLDER</p>
         <h2>新建文件夹</h2>
