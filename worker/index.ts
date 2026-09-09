@@ -4,6 +4,7 @@ import { auth } from './middleware/auth.middleware';
 import { errorHandler } from './middleware/error.middleware';
 import { imageRoutes } from './routes/image.route';
 import { folderRoutes } from './routes/folder.route';
+import { postRoutes } from './routes/post.route';
 import { success } from './utils/response';
 
 const app = new Hono<AppEnv>();
@@ -26,6 +27,9 @@ app.get('/api/health', c => c.json(success({ status: 'ok' })));
 app.use('/api/*', auth);
 app.route('/api/images', imageRoutes);
 app.route('/api/folders', folderRoutes);
+app.route('/api/posts', postRoutes);
+// 资源命名别名保留现有图片接口的全部行为。
+app.route('/api/assets', imageRoutes);
 // Only the local emulator serves image bytes. Production delivery belongs to R2's custom domain.
 app.get('/api/local-images/*', async c => {
   if (c.env.APP_ENV !== 'development') return c.notFound();

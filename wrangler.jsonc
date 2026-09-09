@@ -10,6 +10,10 @@
   "observability": { "enabled": true },
   "r2_buckets": [{ "binding": "IMAGE_BUCKET", "bucket_name": "march7th-assets" }],
   "vars": {
+    "GITHUB_OWNER": "March7th-OvO",
+    "GITHUB_REPO": "Firefly",
+    "GITHUB_BRANCH": "master",
+    "GITHUB_POSTS_PATH": "src/content/posts",
     "APP_ENV": "production",
     "PUBLIC_IMAGE_URL": "https://img.odette.moe",
     "ACCESS_TEAM_DOMAIN": "huxiaotao.cloudflareaccess.com",
@@ -17,7 +21,7 @@
   },
   "env": {
     "development": {
-      "vars": { "APP_ENV": "development", "PUBLIC_IMAGE_URL": "https://assets.march7th.moe", "ACCESS_TEAM_DOMAIN": "", "ACCESS_AUD": "" },
+      "vars": { "APP_ENV": "development", "PUBLIC_IMAGE_URL": "https://assets.march7th.moe", "ACCESS_TEAM_DOMAIN": "", "ACCESS_AUD": "", "GITHUB_OWNER": "March7th-OvO", "GITHUB_REPO": "Firefly", "GITHUB_BRANCH": "master", "GITHUB_POSTS_PATH": "src/content/posts", "GITHUB_ALLOW_WRITES": "false" },
       // 本地 Worker 直接使用线上桶，上传和删除也会作用于线上对象。
       "r2_buckets": [{ "binding": "IMAGE_BUCKET", "bucket_name": "march7th-assets", "preview_bucket_name": "march7th-assets", "remote": true }]
     }

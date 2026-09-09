@@ -1,6 +1,10 @@
-# Odette · 图床
+# Odette · 媒体与文章管理
 
 React + Vite + TypeScript 管理后台与 Hono API 部署在**同一个 Cloudflare Worker**。R2 保存原图，生产图片通过 R2 自定义域名直接分发，不经过管理 Worker。没有数据库、注册系统或额外服务器。
+
+Articles 页面位于 `/articles`，通过 GitHub 管理 `March7th-OvO/Firefly` 的 `master` 分支下 `src/content/posts/`。支持嵌套 Markdown / MDX、Page Bundle 与本地图片；正文按原始文本保存，frontmatter 通过表单编辑。图片库位于 `/assets`，原首页和 `/api/images`、`/api/folders` 保持可用；`/api/assets` 是图片接口别名。全局侧边栏保留原有样式与展开交互。
+
+详细配置、接口与第一版边界见 [Articles 文档](docs/articles.md)。生产写入需要另行设置 `GITHUB_TOKEN` Secret；仓库中不包含凭据，公开仓库可无凭据读取。本地 GitHub 写入默认关闭，避免开发过程中误提交 `master`。这与原有 R2 开发配置独立，R2 仍使用线上桶。
 
 ## 本地启动
 

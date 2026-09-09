@@ -10,17 +10,23 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.worker.json --noEmit",
     "cf-typegen": "wrangler types",
     "deploy": "npm run build && wrangler deploy",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:articles-browser": "node tests/articles-browser.cjs"
   },
   "dependencies": {
+    "github-slugger": "^2.0.0",
     "hono": "^4.13.7",
     "jose": "^6.2.12",
     "lucide-react": "^1.42.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260908.1",
+    "@playwright/test": "^1.63.0",
     "@types/node": "^26.5.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
